@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define PI 3.141592
 
@@ -99,9 +100,15 @@ int main(void)
     }
 
     int running = 1;
+    float delta = 0.0;
+    struct timespec t_i, t_f;
     SDL_Event e;
 
+    float phase = 0;
+    const float rotation_speed = PI / 2;
     while (running) {
+        clock_gettime(CLOCK_MONOTONIC_RAW, &t_i);
+        
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
                 running = 0;
@@ -112,6 +119,7 @@ int main(void)
         memset(pixels, BG_COLOR, RENDER_WIDTH * RENDER_HEIGHT * sizeof(uint32_t));
 
 
+        phase += delta * rotation_speed;
         for (int r = 100; r <= 150; r+=5) {
         FR_DrawRegularPolyRotated(
                 pixels,
@@ -120,7 +128,7 @@ int main(void)
                 X_CENTER,
                 Y_CENTER,
                 r, 12,
-                1.5,
+                phase,
                 GRUVBOX_COLORS[3]
         );
         }
@@ -148,6 +156,7 @@ int main(void)
         const float dtheta = PI / 12;
         for (int i = 0; i < 24; i++) {
             int x1 = X_CENTER; int y1 = Y_CENTER + 100;
+
             FR_DrawCenteredRectRotated(
                 pixels,
                 RENDER_WIDTH,
@@ -156,13 +165,17 @@ int main(void)
                 Y_CENTER,
                 X_CENTER,
                 Y_CENTER,
-                i * dtheta,
+                i * dtheta + phase,
                 GRUVBOX_COLORS[5]
             );
 
-            FR_RotatePointI(&x1, &y1, X_CENTER, Y_CENTER, i * dtheta);
+            FR_RotatePointI(&x1, &y1, X_CENTER, Y_CENTER, i * dtheta + phase);
             FR_DrawLine(pixels, RENDER_WIDTH, RENDER_HEIGHT, X_CENTER, Y_CENTER, x1, y1, GRUVBOX_COLORS[0]);
         }
+
+        //FR_DrawCube3D(pixels, RENDER_WIDTH, RENDER_HEIGHT, phase, GRUVBOX_COLORS[0]);
+
+        FR_PostprocessDither(pixels, RENDER_WIDTH, RENDER_HEIGHT, 0.2, 12, false);
 
         void *tex_pixels;
         int pitch;
@@ -184,6 +197,9 @@ int main(void)
         SDL_RenderClear(ren);
         SDL_RenderCopy(ren, scrtex, NULL, NULL);
         SDL_RenderPresent(ren);
+
+        clock_gettime(CLOCK_MONOTONIC_RAW, &t_f);
+        delta = ((float) t_f.tv_nsec - t_i.tv_nsec) / 1000000000.0;
     }
 
     /* --- cleanup --- */
