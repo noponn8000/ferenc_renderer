@@ -4,11 +4,33 @@
 
 #define PI 3.14159265
 
+const int BAYER_4X4[16] = {
+    0,  8,  2, 10,
+    12, 4, 14, 6,
+    3, 11, 1,  9,
+    15, 7, 13, 5
+};
+
 uint32_t FR_RGBAToAGBR8888(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
     return ((uint32_t)a << 24) |
            ((uint32_t)b << 16) |
            ((uint32_t)g << 8)  |
            (uint32_t)r;
+}
+
+void FR_AGBR8888ToRGBA(uint32_t agbr, uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a)
+{
+    *r =  agbr        & 0xFF;
+    *g = (agbr >> 8)  & 0xFF;
+    *b = (agbr >> 16) & 0xFF;
+    *a = (agbr >> 24) & 0xFF;
+}
+
+float FR_RGBAToLuminance(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+        float rf = (float) r / 255.0;
+        float gf = (float) g / 255.0;
+        float bf = (float) b / 255.0;
+        return 0.299 * rf + 0.587 * gf + 0.114 * bf;
 }
 
 void FR_DrawPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, uint32_t color) {
@@ -18,6 +40,14 @@ void FR_DrawPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x,
     }
 
     pixels[y * canvas_w + x] = color;
+}
+
+uint32_t FR_LookPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y) {
+    if (x >= canvas_w || x < 0 || y >= canvas_h || y < 0) {
+        return 0;
+    }
+
+    return pixels[y * canvas_w + x];
 }
 
 void FR_DrawCircleFill(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, uint16_t radius, uint32_t color) {
@@ -176,6 +206,18 @@ void FR_RotatePointI(int *x, int *y, int xc, int yc, float angle) {
     *y = yc + yprime;
 }
 
+void FR_RotatePointF(float *x, float *y, float xc, float yc, float angle) {
+    float dx = *x - xc;
+    float dy = *y - yc;
+
+    float c = cos(angle); float s = sin(angle);
+    float xprime = dx * c - dy * s;
+    float yprime = dy * c + dx * s;
+
+    *x = xc + xprime;
+    *y = yc + yprime;
+}
+
 void FR_DrawTriangle(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color) {
     FR_DrawLine(pixels, canvas_w, canvas_w, x0, y0, x1, y1, color);
     FR_DrawLine(pixels, canvas_w, canvas_w, x1, y1, x2, y2, color);
@@ -238,5 +280,92 @@ void FR_DrawRegularPolyRotated(uint32_t* pixels, uint16_t canvas_w, uint16_t can
         int yb = yc + radius * sin(dtheta * (i + 1) + angle);
 
         FR_DrawLine(pixels, canvas_w, canvas_h, xa, ya, xb, yb, color);
+    }
+}
+
+void FR_PostprocessDither(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, float dither_strength, int n_levels, bool jitter) {
+    int x_offset, y_offset = 0;
+
+    for (int x = 0; x < canvas_w; x++) {
+        for (int y = 0; y < canvas_h; y++) {
+            if (jitter) { 
+                x_offset = rand() & 3;
+                x_offset = rand() & 3;
+            }
+            // Calculate Bayer matrix threshold
+            float threshold = (BAYER_4X4[4 * ((y + y_offset) % 4) + ((x + x_offset) % 4)] + 0.5) / 16.0;
+
+            // Convert AGBR8888 format to RGBA
+            uint8_t r, g, b, a;
+            FR_AGBR8888ToRGBA(FR_LookPoint(pixels, canvas_w, canvas_h, x, y), &r, &g, &b, &a);
+
+            // Calculate luminance
+            float luminance = FR_RGBAToLuminance(r, g, b, a);
+            // Dither, clamp and quantise
+            float luminance_dithered = luminance + (threshold - 0.5) * dither_strength;
+            if (luminance_dithered < 0.0) luminance_dithered = 0.0; if (luminance_dithered > 1.0) luminance_dithered = 1.0;
+            luminance_dithered = floor(luminance_dithered * n_levels) / n_levels;
+
+            // Apply to original colors
+            float scale = (luminance > 0.0001f) ? (luminance_dithered / luminance) : 0.0f;
+            float rf = r / 255.0f;
+            float gf = g / 255.0f;
+            float bf = b / 255.0f;
+
+            rf *= scale; gf *= scale; bf *= scale;
+            r = (rf < 0) ? 0 : ((rf > 1.0) ? 255 : rf * 255);
+            g = (gf < 0) ? 0 : ((gf > 1.0) ? 255 : gf * 255);
+            b = (bf < 0) ? 0 : ((bf > 1.0) ? 255 : bf * 255);
+
+            uint32_t agbr = FR_RGBAToAGBR8888(r, g, b, a);
+            FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, agbr);
+        }
+    }
+}
+
+void FR_DrawCube3D(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, float rotation, uint32_t color) {
+    const float vertices[24] = {
+        -0.5, 0.5, 0,
+        0.5, 0.5, 0,
+        0.5, -0.5, 0,
+        -0.5, -0.5, 0,
+        -0.5, 0.5, 1.0,
+        0.5, 0.5, 1.0,
+        0.5, -0.5, 1.0,
+        -0.5, -0.5, 1.0,
+    };
+
+    const int edges[24] = {
+        0, 1,
+        1, 2,
+        2, 3,
+        3, 0,
+        0, 4,
+        1, 5,
+        2, 6,
+        3, 7,
+        4, 5,
+        5, 6,
+        6, 7,
+        7, 4
+    };
+
+    for (int edge = 0; edge < 24; edge += 2) {
+        float xa = vertices[3 * edges[edge]];
+        float ya = vertices[3 * edges[edge] + 1];
+        float za = vertices[3 * edges[edge] + 2] + 2.0;
+
+        FR_RotatePointF(&xa, &za, 0, 1.5, rotation);
+        
+        float xb = vertices[3 * edges[edge + 1]];
+        float yb = vertices[3 * edges[edge + 1] + 1];
+        float zb = vertices[3 * edges[edge + 1] + 2] + 2.0;
+
+        FR_RotatePointF(&xb, &zb, 0, 1.5, rotation);
+
+        xa /= za; ya /= za; xb /= zb; yb /= zb;
+        xa = (xa + 1.0) / 2.0; ya = (ya + 1.0) / 2.0;
+        xb = (xb + 1.0) / 2.0; yb = (yb + 1.0) / 2.0;
+        FR_DrawLine(pixels, canvas_w, canvas_h, xa * canvas_w, ya * canvas_h, xb * canvas_w, yb * canvas_h, color);
     }
 }
