@@ -98,6 +98,9 @@ int main(void)
         SDL_Quit();
         return EXIT_FAILURE;
     }
+    
+    int x; int y;
+    uint32_t *fonttex = LoadFontTexture(&x, &y, "font.png");
 
     int running = 1;
     float delta = 0.0;
@@ -172,8 +175,11 @@ int main(void)
             FR_RotatePointI(&x1, &y1, X_CENTER, Y_CENTER, i * dtheta + phase);
             FR_DrawLine(pixels, RENDER_WIDTH, RENDER_HEIGHT, X_CENTER, Y_CENTER, x1, y1, GRUVBOX_COLORS[0]);
         }
-
-        //FR_DrawCube3D(pixels, RENDER_WIDTH, RENDER_HEIGHT, phase, GRUVBOX_COLORS[0]);
+        for (int i = 0; i < x; i++) {
+            for (int j = 0; j < y; j++) {
+                FR_DrawPoint(pixels, RENDER_WIDTH, RENDER_HEIGHT, i, j, fonttex[j * x + i]);
+            }
+        }
 
         FR_PostprocessDither(pixels, RENDER_WIDTH, RENDER_HEIGHT, 0.2, 12, false);
 

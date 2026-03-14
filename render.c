@@ -2,6 +2,9 @@
 #include <math.h>
 #include <stdlib.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #define PI 3.14159265
 
 const int BAYER_4X4[16] = {
@@ -34,6 +37,25 @@ float FR_RGBAToLuminance(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
 }
 
 void FR_DrawPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, uint32_t color) {
+    if (x >= canvas_w || x < 0 || y >= canvas_h || y < 0) {
+        // fprintf(stderr, "Wrong coordinate: (%u, %u)\n", x, y);
+        return;
+    }
+
+    // Alpha blend
+    uint8_t ra, ga, ba, aa;
+    uint8_t rb, gb, bb, ab;
+    FR_AGBR8888ToRGBA(color, &ra, &ga, &ba, &aa);
+    FR_AGBR8888ToRGBA(pixels[y * canvas_w + x], &rb, &gb, &bb, &ab);
+
+    float af = (float) aa / 255;
+    uint8_t r = ra * af + rb * (1.0 - af);
+    uint8_t g = ga * af + gb * (1.0 - af);
+    uint8_t b = ba * af + bb * (1.0 - af);
+    pixels[y * canvas_w + x] = FR_RGBAToAGBR8888(r, g, b, 255);
+}
+
+void FR_SetPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, uint32_t color) {
     if (x >= canvas_w || x < 0 || y >= canvas_h || y < 0) {
         // fprintf(stderr, "Wrong coordinate: (%u, %u)\n", x, y);
         return;
@@ -318,54 +340,45 @@ void FR_PostprocessDither(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h
             b = (bf < 0) ? 0 : ((bf > 1.0) ? 255 : bf * 255);
 
             uint32_t agbr = FR_RGBAToAGBR8888(r, g, b, a);
-            FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, agbr);
+            FR_SetPoint(pixels, canvas_w, canvas_h, x, y, agbr);
         }
     }
 }
 
-void FR_DrawCube3D(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, float rotation, uint32_t color) {
-    const float vertices[24] = {
-        -0.5, 0.5, 0,
-        0.5, 0.5, 0,
-        0.5, -0.5, 0,
-        -0.5, -0.5, 0,
-        -0.5, 0.5, 1.0,
-        0.5, 0.5, 1.0,
-        0.5, -0.5, 1.0,
-        -0.5, -0.5, 1.0,
-    };
-
-    const int edges[24] = {
-        0, 1,
-        1, 2,
-        2, 3,
-        3, 0,
-        0, 4,
-        1, 5,
-        2, 6,
-        3, 7,
-        4, 5,
-        5, 6,
-        6, 7,
-        7, 4
-    };
-
-    for (int edge = 0; edge < 24; edge += 2) {
-        float xa = vertices[3 * edges[edge]];
-        float ya = vertices[3 * edges[edge] + 1];
-        float za = vertices[3 * edges[edge] + 2] + 2.0;
-
-        FR_RotatePointF(&xa, &za, 0, 1.5, rotation);
-        
-        float xb = vertices[3 * edges[edge + 1]];
-        float yb = vertices[3 * edges[edge + 1] + 1];
-        float zb = vertices[3 * edges[edge + 1] + 2] + 2.0;
-
-        FR_RotatePointF(&xb, &zb, 0, 1.5, rotation);
-
-        xa /= za; ya /= za; xb /= zb; yb /= zb;
-        xa = (xa + 1.0) / 2.0; ya = (ya + 1.0) / 2.0;
-        xb = (xb + 1.0) / 2.0; yb = (yb + 1.0) / 2.0;
-        FR_DrawLine(pixels, canvas_w, canvas_h, xa * canvas_w, ya * canvas_h, xb * canvas_w, yb * canvas_h, color);
+void FR_DrawLetter(uint32_t *pixels, uint8_t canvas_w, uint8_t canvas_h, int x, int y, char glyph, Font font) {
+    int glyph_index = -1;
+    for (int i = 0; i < font.n_glyphs; i++) {
+        if (font.glyphs[i] == glyph) {
+            glyph_index = i;
+        }
     }
+
+    if (glyph_index == -1) return;
+
+    int glyphs_x = font.tex_width / font.glyph_width;
+    int x_0 = glyph_index % glyphs_x
+    int y_0 = glyph_index / glyphs_x;
 }
+
+uint32_t* LoadFontTexture(int *tex_width, int *tex_height, char const *font_filename) {
+    int x; int y;
+    unsigned char* pixels = stbi_load(font_filename, &x, &y, NULL, 4);
+    uint32_t* texture = malloc(sizeof(uint32_t) * x * y);
+
+    for (int i = 0; i < x * y; i++) {
+        int r = pixels[4 * i];
+        int g = pixels[4 * i + 1];
+        int b = pixels[4 * i + 2];
+        int a = pixels[4 * i + 3];
+        uint32_t color = FR_RGBAToAGBR8888(r, g, b, a);
+        texture[i] = color;
+    }
+
+    stbi_image_free(pixels);
+
+    *tex_width = x;
+    *tex_height = y;
+
+    return texture;
+}
+

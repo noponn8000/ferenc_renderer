@@ -1,6 +1,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef struct {
+    uint32_t* fonttex;
+    int tex_width;
+    int tex_height;
+    int glyph_width;
+    int glyph_height;
+    int n_glyphs;
+    char* glyphs;
+} Font;
+
 // Color
 uint32_t FR_RGBAToAGBR8888(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
@@ -24,7 +34,9 @@ void FR_DrawRegularPolyRotated(uint32_t* pixels, uint16_t canvas_w, uint16_t can
 void FR_DrawRect(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, int width, int height, uint32_t color);
 void FR_DrawTriangle(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color);
 void FR_DrawTriangleFill(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color);
-void FR_DrawCube3D(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, float rotation, uint32_t color);
+
+// - - - - - - Font drawing
+uint32_t* LoadFontTexture(int* tex_width, int* tex_height, char const *font_filename);
 
 // - - - - - - - - - - - - Post-processing
 void FR_PostprocessDither(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, float dither_strength, int n_levels, bool jitter);
