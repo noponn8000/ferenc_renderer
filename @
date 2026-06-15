@@ -14,73 +14,38 @@ SDL_Renderer *ren;
 SDL_Texture  *scrtex;
 uint32_t     *framebuffer;
 
-int mouseX;
-int mouseY;
-
-#define N_SEGMENTS 8
+#define N_SEGMENTS 8;
 typedef struct {
+   Vector2 segments[N_SEGMENTS];
+   int segmentRadii[N_SEGMENTS];
    Vector2f direction;
    int speed;
-   float phase;
    Font font;
-   Vector2f segments[N_SEGMENTS];
-   int segmentRadii[N_SEGMENTS];
 } SnakeData;
-
 
 void SnakeInit(void* self) {
     SnakeData* data = (SnakeData*)self;
     for (int i = 0; i < N_SEGMENTS; i++) {
-    	data->segmentRadii[i] = 5 + 2 * (N_SEGMENTS - i);
-	data->segments[i].x = 40 - (4 * i);
-	data->segments[i].y = 150;
+    	data->segmentRadii[i] = 20 + 5 * i;
     }
-    data->direction.x = 1.0;
-    data->direction.y = 0.0;
-    data->speed = 30;
+    data->direction = { 1.0, 0 };
+    data->speed = 5;
 }
 
 void SnakeUpdate(void* self, float dt) {
     SnakeData* data = (SnakeData*)self;
-    data->phase += dt * 0.5;
-    Vector2f headPos = data->segments[0];
-    data->segments[0].x = headPos.x + data->direction.x * data->speed * dt;
-    data->segments[0].y = headPos.y + data->direction.y * data->speed * dt;
 
-    Vector2f toMouse = {
-    	mouseX - data->segments[0].x,
-    	mouseY - data->segments[0].y,
-    };
-    float length = sqrtf(toMouse.x * toMouse.x + toMouse.y * toMouse.y);
-    data->direction.x = toMouse.x / length;
-    data->direction.y = toMouse.y / length;
-    
-    for (int i = 1; i < N_SEGMENTS; i++) {
-    Vector2f prev = data->segments[i-1];
-    Vector2f curr = data->segments[i];
-
-    Vector2f diff = { curr.x - prev.x, curr.y - prev.y };
-    float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
-
-    if (dist > 0) {
-        float targetDist = data->segmentRadii[i];
-        data->segments[i].x = prev.x + (diff.x / dist) * targetDist;
-        data->segments[i].y = prev.y + (diff.y / dist) * targetDist;
-    }
-}
 }
 
 void SnakeDraw(void* self, RenderContext ctx) {
     SnakeData* data = (SnakeData*)self;
-    for (int i = 0; i < N_SEGMENTS; i++) {
-    	const uint32_t fg = FR_RGBAToAGBR8888(0xFB - 5*i, 0x49 - 5*i, 0x34 - 5*i, 0xFF);
-    	FR_DrawCircleFill(
-		ctx.pixels, ctx.canvas_w, ctx.canvas_h,
-		(int) data->segments[i].x, (int) data->segments[i].y,
-		data->segmentRadii[i], fg
-	);
-    }
-    FR_PostprocessDither(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 0.5, 4, false);
+    uint32_t red = FR_RGBAToAGBR8888(0xFB, 0x49, 0x34, 0xFF);
+    uint32_t aqua = FR_RGBAToAGBR8888(data->r, data->g, data->b, 0xFF);
+    
+    FR_DrawCircleFill(ctx.pixels, ctx.canvas_w, ctx.canvas_h, data->posx, data->posy, data->radius, aqua);
+    
+    FR_DrawText(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 10, 10, 300, 100, 
+                4, 2, 4, red, "Engine Running!", data->font);
 }
 
 float MyPreFrame(void* self) {
@@ -90,19 +55,12 @@ float MyPreFrame(void* self) {
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) exit(0); 
     }
-    SDL_GetMouseState(&mouseX, &mouseY);
-    mouseX /= 3; mouseY /= 3;
 
-    	static struct timespec t_i;
-	struct timespec t_f;
-	clock_gettime(CLOCK_MONOTONIC_RAW, &t_f);
-
-	double start = (double)t_i.tv_sec + (double)t_i.tv_nsec / 1e9;
-	double end = (double)t_f.tv_sec + (double)t_f.tv_nsec / 1e9;
-	float dt = (float)(end - start);
-
-	if (t_i.tv_sec == 0 || dt > 0.1f) dt = 0.016f; // Initial frame or spike
-	t_i = t_f;
+    static struct timespec t_i, t_f;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &t_f);
+    float dt = (float)(t_f.tv_nsec - t_i.tv_nsec) / 1000000000.0f;
+    if (dt < 0 || dt > 0.1) dt = 0.016f; // Clamp spikes
+    t_i = t_f;
     
     return dt;
 }

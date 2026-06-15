@@ -1,0 +1,120 @@
+#include <SDL2/SDL.h>
+#include <stdio.h>
+#include <time.h>
+#include <string.h>
+
+#include "engine.h"
+#include "render.h"
+#include "font.h"
+
+// SDL state
+SDL_Window   *win;
+SDL_Renderer *ren;
+SDL_Texture  *scrtex;
+uint32_t     *framebuffer;
+
+typedef struct {
+   int posx;
+   int posy;
+   int radius;
+   float phase;
+   unsigned char r;
+   unsigned char g;
+   unsigned char b;
+    Font font;
+} SceneData;
+
+void SceneInit(void* self) {
+    SceneData* data = (SceneData*)self;
+    data->posx = 200;
+    data->posy = 0;
+    data -> radius = 0;
+}
+
+void SceneUpdate(void* self, float dt) {
+    SceneData* data = (SceneData*)self;
+    data->phase += dt;
+    data->posy = 150 + sin(2.5 * data->phase) * 80;
+    data->posx = 200 + (100 * cos(3.5 * data->phase));
+    data->radius = 50 * (1 + cos(1.5 * data->phase));
+    data->r = (int) 120 * (1 + cos(1.5 * data->phase));
+    data->g = (int) 120 * (1 + cos(2.5 * data->phase));
+    data->b = (int) 120 * (1 + cos(4.5 * data->phase));
+}
+
+void SceneDraw(void* self, RenderContext ctx) {
+    SceneData* data = (SceneData*)self;
+    uint32_t red = FR_RGBAToAGBR8888(0xFB, 0x49, 0x34, 0xFF);
+    uint32_t aqua = FR_RGBAToAGBR8888(data->r, data->g, data->b, 0xFF);
+    
+    FR_DrawCircleFill(ctx.pixels, ctx.canvas_w, ctx.canvas_h, data->posx, data->posy, data->radius, aqua);
+    
+    FR_DrawText(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 10, 10, 300, 100, 
+                4, 2, 4, red, "Engine Running!", data->font);
+}
+
+float MyPreFrame(void* self) {
+    memset(framebuffer, 0x12, 400 * 300 * sizeof(uint32_t)); // Dark BG
+    
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+        if (e.type == SDL_QUIT) exit(0); 
+    }
+
+    static struct timespec t_i, t_f;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &t_f);
+    float dt = (float)(t_f.tv_nsec - t_i.tv_nsec) / 1000000000.0f;
+    if (dt < 0 || dt > 0.1) dt = 0.016f; // Clamp spikes
+    t_i = t_f;
+    
+    return dt;
+}
+
+void MyPostFrame(void* self) {
+    // Upload framebuffer to SDL Texture
+    void *tex_pixels;
+    int pitch;
+    SDL_LockTexture(scrtex, NULL, &tex_pixels, &pitch);
+    
+    uint8_t *dst = (uint8_t *)tex_pixels;
+    uint8_t *src = (uint8_t *)framebuffer;
+    for (int y = 0; y < 300; y++) {
+        memcpy(dst, src, 400 * sizeof(uint32_t));
+        dst += pitch;
+        src += 400 * sizeof(uint32_t);
+    }
+    SDL_UnlockTexture(scrtex);
+
+    SDL_RenderClear(ren);
+    SDL_RenderCopy(ren, scrtex, NULL, NULL);
+    SDL_RenderPresent(ren);
+}
+
+int main(int argc, char* argv[]) {
+    SDL_Init(SDL_INIT_VIDEO);
+    win = SDL_CreateWindow("Engine Driver", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1200, 900, 0);
+    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+    scrtex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, 400, 300);
+    framebuffer = calloc(400 * 300, sizeof(uint32_t));
+
+    Engine engine = FE_InitEngine(MyPreFrame, MyPostFrame);
+    RenderContext ctx = { framebuffer, 400, 300 };
+
+    SceneData mySceneData = { .font = { fonttex, FONT_TEX_WIDTH, FONT_TEX_HEIGHT, FONT_GLYPH_WIDTH, FONT_GLYPH_HEIGHT, FONT_N_GLYPHS, FONT_GLYPH_SET, lookup } };
+    Entity sceneElement = {
+        .c_init = SceneInit,
+        .c_update = SceneUpdate,
+        .c_draw = SceneDraw,
+        .data = &mySceneData
+    };
+    
+    FE_AddEntity(&engine, sceneElement);
+
+    while (true) {
+        FE_Loop(&engine, ctx);
+    }
+
+    // Cleanup
+    FE_DestroyEngine(&engine);
+    return 0;
+}

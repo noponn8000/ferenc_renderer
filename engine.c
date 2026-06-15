@@ -1,69 +1,74 @@
 #include <stdlib.h>
 #include <stdbool.h>
-
 #include "engine.h"
 
-int main(void) {
-    return EXIT_SUCCESS;
+Engine FE_InitEngine(PreFrameCallback pre_frame, PostFrameCallback post_frame) {
+    Entity* entities = malloc(32 * sizeof(Entity));
+    Engine engine = {
+    	pre_frame,
+	post_frame,
+	entities,
+	32,
+	0,
+	0
+    };
+
+    return engine;
 }
 
-void FE_InitEngine(PreFrameCallback pre_frame, PostFrameCallback post_frame) {
-     
+void FE_DestroyEngine(Engine* engine) {
+	free(engine->entities);
 }
 
-EntityRef FE_RegisterEntity(Engine* e, Entity* entity) {
-    EntityRef ref = {0};
-    for (int i = 0; i < e->entity_count; i++) {
-        if (e->entities[i].full) {
-            ref.epoch = e->entities[i].epoch;
-            ref.ref = e->entities[i].index;
-            e->entities[i].full = true;
-            e->entities[i].entity = entity;
-
-            return ref;
-        }
-    }
-
-    // Resize the array and put the entity in the first available place
-    size_t index = FE_GrowEntityStore(e);
-    e->entities[index].full = true; 
-    e->entities[index].entity = entity;
-    ref.epoch = e->entities[index].epoch;
-    ref.ref = e->entities[index].index;
-
-    return ref;
+int FE_AddEntity(Engine* engine, Entity e) {
+	if (engine->entity_count >= engine->capacity) {
+		// Resize entity store
+		engine->capacity *= 2;
+		engine->entities = realloc(engine->entities, engine->capacity * sizeof(Entity));
+	}
+	e.id = engine->id_counter++;
+	engine->entities[engine->entity_count] = e;
+	engine->entities[engine->entity_count].c_init(e.data);
+	engine->entity_count++;
+	return e.id;
 }
 
-size_t FE_GrowEntityStore(Engine* e) {
-    e->entities = realloc(e->entities, sizeof(EntityField) * e->entity_count * 2);
-    size_t available_index = e->entity_count;
-
-    for (int i = e->entity_count; i < e->entity_count * 2; i++) {
-        e->entities[i].index = i;
-    }
-
-    e->entity_count *= 2;
-    return available_index;
+void FE_RemoveEntity(Engine* engine, int id) {
+	for (int i = 0; i < engine->entity_count; i++) {
+		if (engine->entities[i].id == id) {
+			engine->entities[i].queueFree = true;
+			return;
+		}
+	}
 }
 
-bool FE_IsEntityRefValid(Engine* e, EntityRef ref) {
-    if (ref.ref < 0 || ref.ref >= e->entity_count) {
-        return false;
-    }
+void FE_Loop(Engine* engine, RenderContext ctx) {
+	float delta = engine->preframe(NULL);
+	for (int i = 0; i < engine->entity_count; i++) {
+		Entity* e = &engine->entities[i];
+		e->c_update(e->data, delta);
+		e->c_draw(e->data, ctx);
+	}
 
-    if (!e->entities[ref.ref].full || e->entities[ref.ref].epoch != ref.epoch) {
-        return false;
-    }
-
-    return true;
+	// Free entities that are queued to be deleted
+	FE_Free(engine);
+	// Call post-frame callback
+	engine->postframe(NULL);
 }
 
-void FE_RemoveObject(Engine* e, EntityRef ref) {
-    if (!FE_IsEntityRefValid(e, ref)) {
-        return;
-    }
+void FE_Free(Engine* engine) {
+	for (int i = 0; i < engine->entity_count; ) {
+		if (engine->entities[i].queueFree) {
+			if (engine->entities[i].c_remove)
+				engine->entities[i].c_remove(engine->entities[i].data);
 
-    e->entities[ref.ref].full = false;
-    e->entities[ref.ref].epoch++;
+			// Swap the last entity into the place of the one being removed
+			engine->entities[i] = engine->entities[engine->entity_count - 1];		
+			// Decrement entity count
+			engine->entity_count--;
+		} else {
+			i++;
+		}
+	}
 }
 

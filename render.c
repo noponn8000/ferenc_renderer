@@ -2,9 +2,6 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 #define PI 3.14159265
 
 const int BAYER_4X4[16] = {
@@ -112,6 +109,15 @@ void FR_DrawRect(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x_t
     }
 }
 
+void FR_DrawRectFill(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, int width, int height, uint32_t color)
+{
+	for (int j = y_tl; j <= y_tl + height; j++) {
+		for (int i = x_tl; i <= x_tl + width; i++) {
+			pixels[j * canvas_w + i] = color;
+		}
+	}	
+}
+
 void DrawLineHigh(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x0, int y0, int x1, int y1, uint32_t color) {
     int dx = x1 - x0;
     int dy = y1 - y0;
@@ -183,10 +189,6 @@ void FR_DrawCenteredRect(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h,
         FR_DrawPoint(pixels, canvas_w, canvas_h, xc - width/2, yc + yi, color);
         FR_DrawPoint(pixels, canvas_w, canvas_h, xc + width/2, yc + yi, color);
     }
-}
-
-void FR_DrawRegularPoly(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, uint16_t radius, uint8_t sides, uint32_t color) {
-     
 }
 
 void FR_DrawCenteredRectRotated(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int xc, int yc, int width, int height, float angle, uint32_t color) {
@@ -345,40 +347,40 @@ void FR_PostprocessDither(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h
     }
 }
 
-void FR_DrawLetter(uint32_t *pixels, uint8_t canvas_w, uint8_t canvas_h, int x, int y, char glyph, Font font) {
-    int glyph_index = -1;
-    for (int i = 0; i < font.n_glyphs; i++) {
-        if (font.glyphs[i] == glyph) {
-            glyph_index = i;
-        }
-    }
-
+void FR_DrawLetter(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, char glyph, uint32_t color, Font font) {
+    int glyph_index = font.lookup[glyph];
     if (glyph_index == -1) return;
 
     int glyphs_x = font.tex_width / font.glyph_width;
-    int x_0 = glyph_index % glyphs_x
-    int y_0 = glyph_index / glyphs_x;
-}
+    int x_0 = glyph_index % glyphs_x * font.glyph_width;
+    int y_0 = glyph_index / glyphs_x * font.glyph_height;
 
-uint32_t* LoadFontTexture(int *tex_width, int *tex_height, char const *font_filename) {
-    int x; int y;
-    unsigned char* pixels = stbi_load(font_filename, &x, &y, NULL, 4);
-    uint32_t* texture = malloc(sizeof(uint32_t) * x * y);
-
-    for (int i = 0; i < x * y; i++) {
-        int r = pixels[4 * i];
-        int g = pixels[4 * i + 1];
-        int b = pixels[4 * i + 2];
-        int a = pixels[4 * i + 3];
-        uint32_t color = FR_RGBAToAGBR8888(r, g, b, a);
-        texture[i] = color;
+    for (int j = 0; j < font.glyph_height; j++) {
+        for (int i = 0; i < font.glyph_width; i++) {
+		if (font.fonttex[(y_0 + j) * font.tex_width + (x_0 + i)] != 0) {
+            		FR_DrawPoint(pixels, canvas_w, canvas_h, x + i, y + j, color);
+	    	}
+        }
     }
-
-    stbi_image_free(pixels);
-
-    *tex_width = x;
-    *tex_height = y;
-
-    return texture;
 }
+
+void FR_DrawText(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, int width, int height, int margin, int glyph_spacing, int line_spacing, uint32_t fg_color, char* text, Font font) {
+	// Draw text
+	int x = x_tl + margin; int y = y_tl + margin;	
+	int i = 0;
+	char current = text[0];
+	while (current != '\0') {
+		if (current == '\n') {
+			y += line_spacing + font.glyph_height;
+			x = x_tl + margin;
+			current = text[++i]; 
+			continue;
+		}
+
+		FR_DrawLetter(pixels, canvas_w, canvas_h, x, y, current, fg_color, font);
+		x += font.glyph_width + glyph_spacing;
+		current = text[++i];
+	}
+}
+
 
