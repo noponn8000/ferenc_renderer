@@ -7,93 +7,257 @@
 #include "render.h"
 #include "font.h"
 #include "physics.h"
+#include "audio.h"
+#include "pbm_reader.h"
 
 // SDL state
 SDL_Window   *win;
 SDL_Renderer *ren;
 SDL_Texture  *scrtex;
 uint32_t     *framebuffer;
+SDL_AudioDeviceID dev;
 
-int mouseX;
-int mouseY;
+// Scale factor canvas size -> window size
+#define WINDOW_SCALE_FACTOR 3
 
-#define N_SEGMENTS 8
-typedef struct {
-   Vector2f direction;
-   int speed;
-   float phase;
-   Font font;
-   Vector2f segments[N_SEGMENTS];
-   int segmentRadii[N_SEGMENTS];
-} SnakeData;
+typedef struct {    
+    // Textures
+    bool* texture;
+    int texWidth;
+    int texHeight;
+    // Animation
+    int framesX;
+    int framesY;
+    int frame;
+    double targetFrameTime;
+    double frameTime;
+    // Audio
+    float baseFreq;
+    // State
+    Vector2i direction;
+    Vector2f position;
+    int speed;
+    // Input
+    bool left;
+    bool right;
+    bool up;
+    bool down;
+} PlayerData;
 
 
-void SnakeInit(void* self) {
-    SnakeData* data = (SnakeData*)self;
-    for (int i = 0; i < N_SEGMENTS; i++) {
-    	data->segmentRadii[i] = 5 + 2 * (N_SEGMENTS - i);
-	data->segments[i].x = 40 - (4 * i);
-	data->segments[i].y = 150;
-    }
-    data->direction.x = 1.0;
-    data->direction.y = 0.0;
+void PlayerInit(void* self) {
+    PlayerData* data = (PlayerData*) self;
+    data->direction.x = 0;
+    data->direction.y = 0;
+    data->position.x = 200;
+    data->position.y = 200;
+    data->left = false;
+    data->right = false;
+    data->up = false;
+    data->down = false;
     data->speed = 30;
+
+    FILE *texFile = fopen("res/player.pbm", "rb");
+
+    data->texture = readPBM(texFile, &(data->texWidth), &(data->texHeight));
+    data->framesX = 1;
+    data->framesY = 2;
+    data->frame = 0;
+    data->frameTime = 0.0;
+    data->targetFrameTime = 0.15;
+
+    data->baseFreq = 200.0;
+
+    fclose(texFile);
 }
 
-void SnakeUpdate(void* self, float dt) {
-    SnakeData* data = (SnakeData*)self;
-    data->phase += dt * 0.5;
-    Vector2f headPos = data->segments[0];
-    data->segments[0].x = headPos.x + data->direction.x * data->speed * dt;
-    data->segments[0].y = headPos.y + data->direction.y * data->speed * dt;
+void PlayerUpdate(void* self, Input input, float dt) {
+    PlayerData* data = (PlayerData*) self;
 
-    Vector2f toMouse = {
-    	mouseX - data->segments[0].x,
-    	mouseY - data->segments[0].y,
-    };
-    float length = sqrtf(toMouse.x * toMouse.x + toMouse.y * toMouse.y);
-    data->direction.x = toMouse.x / length;
-    data->direction.y = toMouse.y / length;
-    
-    for (int i = 1; i < N_SEGMENTS; i++) {
-    Vector2f prev = data->segments[i-1];
-    Vector2f curr = data->segments[i];
-
-    Vector2f diff = { curr.x - prev.x, curr.y - prev.y };
-    float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
-
-    if (dist > 0) {
-        float targetDist = data->segmentRadii[i];
-        data->segments[i].x = prev.x + (diff.x / dist) * targetDist;
-        data->segments[i].y = prev.y + (diff.y / dist) * targetDist;
+    for (int i = 0; i < input.event_counter; i++) {
+        if (input.events[i].key == 'a') {
+            data->left = input.events[i].down;
+        }
+        else if (input.events[i].key == 'e') {
+            data->right = input.events[i].down;
+        }
+        else if (input.events[i].key == ',') {
+            data->up = input.events[i].down;
+        }
+        else if (input.events[i].key == 'o') {
+            data->down = input.events[i].down;
+        }
     }
-}
+
+    data->direction.x = 0; data->direction.y = 0;
+    if (data->left) data->direction.x -= 1;
+    if (data->right) data->direction.x += 1;
+    if (data->up) data->direction.y -= 1;
+    if (data->down) data->direction.y += 1;
+
+
+    data->position.x += data->speed * data->direction.x * dt;
+    data->position.y += data->speed * data->direction.y * dt;
+
+    // Animate
+    if (data->frameTime > data->targetFrameTime) {
+        data->frame = (data->frame + 1) % 2;
+        data->frameTime -= data->targetFrameTime;
+    }
+    data->frameTime += dt;
+
+    data->baseFreq += 10.0 * dt;
+    if (data->baseFreq > 800.0) data->baseFreq = 200.0;
 }
 
-void SnakeDraw(void* self, RenderContext ctx) {
-    SnakeData* data = (SnakeData*)self;
-    for (int i = 0; i < N_SEGMENTS; i++) {
-    	const uint32_t fg = FR_RGBAToAGBR8888(0xFB - 5*i, 0x49 - 5*i, 0x34 - 5*i, 0xFF);
-    	FR_DrawCircleFill(
+void PlayerDraw(void* self, RenderContext ctx) {
+    PlayerData* data = (PlayerData*) self;
+    FR_DrawBinarySpritesheet(
 		ctx.pixels, ctx.canvas_w, ctx.canvas_h,
-		(int) data->segments[i].x, (int) data->segments[i].y,
-		data->segmentRadii[i], fg
-	);
+		(int) data->position.x, (int) data->position.y,
+        data->texture, data->texWidth, data->texHeight,
+        data->framesX, data->framesY, data->frame,
+        0xFFFFFFFF
+    );
+
+    //FR_PostprocessDither(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 0.5, 4, false);
+}
+
+void PlayerAudio(void* self, AudioContext ctx) {
+    PlayerData* data = (PlayerData*) self;
+    int samples = ctx.streams[0].n_samples;
+
+    FR_ClearBuffer(ctx.output, samples);
+    FR_Sine(ctx.output, samples, ctx.sample_rate, ctx.t, data->baseFreq, 0.1);
+    FR_Sine(ctx.output, samples, ctx.sample_rate, ctx.t, data->baseFreq * 1.25, 0.1);
+    FR_Sine(ctx.output, samples, ctx.sample_rate, ctx.t, data->baseFreq * 1.5, 0.1);
+}
+
+typedef struct {
+    Font font;
+    int shown;
+    int cps;
+    float acc;
+    Vector2i position;
+    // In glyphs
+    Vector2i size;
+    Vector2i margin;
+    Vector2i glyphSpacing;
+    char* str;
+} TextboxData;
+
+void TextboxInit(void *self) {
+    TextboxData* data =  (TextboxData*) self;
+    FILE *texFile = fopen("res/font_halfsize.pbm", "rb");
+
+    int x; int y;
+    bool* fonttex = readPBM(texFile, &x, &y);
+    Font font = {
+        fonttex,
+        x, y,
+        FONT_GLYPH_WIDTH_SM, FONT_GLYPH_HEIGHT_SM,
+        FONT_N_GLYPHS, FONT_GLYPH_SET,
+        lookup
+    };
+
+    data->font = font;
+    data->shown = 0; data->cps = 15;
+    data->position.x = 8; data->position.y = 8;
+    data->size.x = 46; data->size.y = 8;
+    data->margin.x = 8; data->margin.y = 8;
+    data->glyphSpacing.x = 0; data->glyphSpacing.y = 4;
+    data->str = "You are a singing chalice. Revel in your new body, for you have been blessed. The nullity welcomes you into its lukewarm embrace.";
+}
+
+void TextboxDraw(void* self, RenderContext ctx) {
+    TextboxData* data =  (TextboxData*) self;
+
+    char current = data->str[0];
+    int x_0 = data->position.x + data->margin.x;
+    int y_0 = data->position.y + data->margin.y;
+    int x = x_0; int y = y_0;
+    int i = 0;
+    while (current != '\0' && i < data->size.x * data->size.y && i < data->shown) {
+        if (current == ' ') {
+            int remaining = data->size.x - (i % data->size.x);
+            int wordLen = 0;
+            // Check if we need to wrap
+            for (int k = i + 1; ; k++) {
+                char peek = data->str[k];
+                if (peek == '\0' || peek == ' ' || peek == '\n') {
+                    break;
+                }
+
+                wordLen++;
+            }
+
+            // No space found further on, so we break on this one.
+            if (wordLen >= remaining)
+                current = '\n';
+        }
+
+        if (current == '\n') {
+            x = x_0;
+            y += data->font.glyph_height + data->glyphSpacing.y;
+            current = data->str[++i];
+            continue;
+        }
+
+        FR_DrawLetter(ctx.pixels, ctx.canvas_w, ctx.canvas_h, x, y, current, 0xFFFFFFFF, data->font);
+        x += data->font.glyph_width + data->glyphSpacing.x;
+        current = data->str[++i];
     }
-    FR_PostprocessDither(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 0.5, 4, false);
+
+    FR_DrawRect(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 
+                data->position.x, data->position.y,
+                2 * data->margin.x + data->size.x * data->font.glyph_width,
+                2 * data->margin.y + data->size.y * data->font.glyph_height,
+                0xFFFFFFFF);
+}
+
+void TextboxUpdate(void* self, Input input, float dt) {
+    TextboxData* data =  (TextboxData*) self;
+
+    data->acc += dt;
+    if (data->acc > (1.0 / data->cps)) {
+        data->shown++;
+        data->acc -= (1.0 / data->cps);
+    }
 }
 
 float MyPreFrame(void* self) {
-    memset(framebuffer, 0x12, 400 * 300 * sizeof(uint32_t)); // Dark BG
+    memset(framebuffer, 0x12, 400 * 300 * sizeof(uint32_t)); // Clear framebuffer
     
     SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_QUIT) exit(0); 
-    }
-    SDL_GetMouseState(&mouseX, &mouseY);
-    mouseX /= 3; mouseY /= 3;
+    Engine* eng = (Engine*) self;
+    // Clear input buffer
+    eng->input.event_counter = 0;
 
-    	static struct timespec t_i;
+    while (SDL_PollEvent(&e)) {
+        switch (e.type) {
+            case SDL_QUIT:
+                exit(0);
+                break;
+            case SDL_MOUSEMOTION:
+                eng->input.mouseX = (int) e.motion.x / WINDOW_SCALE_FACTOR;
+                eng->input.mouseY = (int) e.motion.y / WINDOW_SCALE_FACTOR;
+                break;
+            case SDL_KEYDOWN:
+                if (eng->input.event_counter < INPUT_BUFFER_SIZE) {
+                    InputEvent ev = { e.key.keysym.sym, true };
+                    eng->input.events[eng->input.event_counter++] = ev;
+                }
+                break;
+            case SDL_KEYUP:
+                if (eng->input.event_counter < INPUT_BUFFER_SIZE) {
+                    InputEvent ev = { e.key.keysym.sym, false };
+                    eng->input.events[eng->input.event_counter++] = ev;
+                }
+                break;
+        }
+    }
+
+    static struct timespec t_i;
 	struct timespec t_f;
 	clock_gettime(CLOCK_MONOTONIC_RAW, &t_f);
 
@@ -101,13 +265,14 @@ float MyPreFrame(void* self) {
 	double end = (double)t_f.tv_sec + (double)t_f.tv_nsec / 1e9;
 	float dt = (float)(end - start);
 
-	if (t_i.tv_sec == 0 || dt > 0.1f) dt = 0.016f; // Initial frame or spike
+	if (t_i.tv_sec == 0 || dt > 0.1f) dt = 0.016f;
 	t_i = t_f;
     
     return dt;
 }
 
-void MyPostFrame(void* self) {
+void MyPostFrame(void* self, RenderContext rctx, AudioContext actx) {
+    Engine* engine = (Engine*) self;
     // Upload framebuffer to SDL Texture
     void *tex_pixels;
     int pitch;
@@ -125,30 +290,80 @@ void MyPostFrame(void* self) {
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, scrtex, NULL, NULL);
     SDL_RenderPresent(ren);
+
+    SDL_QueueAudio(
+        dev,
+        actx.output,
+        actx.streams[0].n_samples * sizeof(float)
+);
 }
 
-int main(int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_VIDEO);
-    win = SDL_CreateWindow("Engine Driver", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1200, 900, 0);
-    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+int main(void) {
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    win = SDL_CreateWindow("Engine Driver", SDL_WINDOWPOS_CENTERED,
+                           SDL_WINDOWPOS_CENTERED, 1200, 900,
+                           SDL_WINDOW_BORDERLESS);
+    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     scrtex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, 400, 300);
     framebuffer = calloc(400 * 300, sizeof(uint32_t));
 
-    Engine engine = FE_InitEngine(MyPreFrame, MyPostFrame);
-    RenderContext ctx = { framebuffer, 400, 300 };
+    // Initialize audio
+    SDL_AudioSpec desired = {0};
+    desired.freq = 48000;
+    desired.format = AUDIO_F32;
+    desired.channels = 1;
+    desired.samples = 896;
+    desired.callback = NULL;
 
-    SnakeData mySnakeData = { .font = { fonttex, FONT_TEX_WIDTH, FONT_TEX_HEIGHT, FONT_GLYPH_WIDTH, FONT_GLYPH_HEIGHT, FONT_N_GLYPHS, FONT_GLYPH_SET, lookup } };
-    Entity snake = {
-        .c_init = SnakeInit,
-        .c_update = SnakeUpdate,
-        .c_draw = SnakeDraw,
-        .data = &mySnakeData
+    dev =
+        SDL_OpenAudioDevice(NULL, 0, &desired, NULL, 0);
+
+    if (dev == 0) {
+        printf("OpenAudioDevice failed: %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
+
+
+    Engine engine = FE_InitEngine(MyPreFrame, MyPostFrame);
+    RenderContext rctx = { framebuffer, 400, 300 };
+    AudioContext actx = {
+        .sample_rate = 48000
+    }; 
+
+    for (int i = 0; i < N_AUDIO_STREAMS; i++) {
+        AudioStream s = {
+            .frames = calloc(896, sizeof(float)),
+            .n_samples = 896
+        };
+        actx.streams[i] = s;
+    }
+    actx.output = calloc(896, sizeof(float));
+
+    PlayerData myPlayerData = {0};
+    Entity player = {
+        .c_init = PlayerInit,
+        .c_update = PlayerUpdate,
+        .c_draw = PlayerDraw,
+        .c_audio = PlayerAudio,
+        .data = &myPlayerData
+    };
+
+    TextboxData myTextboxData = {0};
+    Entity textbox = {
+        .c_init = TextboxInit,
+        .c_update = TextboxUpdate,
+        .c_draw = TextboxDraw,
+        .c_audio = NULL,
+        .data = &myTextboxData
     };
     
-    FE_AddEntity(&engine, snake);
+    FE_AddEntity(&engine, player);
+    FE_AddEntity(&engine, textbox);
 
+    SDL_PauseAudioDevice(dev, 0);
     while (true) {
-        FE_Loop(&engine, ctx);
+        FE_Loop(&engine, rctx, actx);
+        actx.t += (double)actx.streams[0].n_samples / actx.sample_rate;
     }
 
     // Cleanup

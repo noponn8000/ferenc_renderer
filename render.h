@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 typedef struct {
-    uint32_t* fonttex;
+    bool* fonttex;
     int tex_width;
     int tex_height;
     int glyph_width;
@@ -38,9 +38,12 @@ void FR_DrawTriangle(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int
 void FR_DrawTriangleFill(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color);
 
 // - - - - - - Font drawing
-uint32_t* LoadFontTexture(int* tex_width, int* tex_height, char const *font_filename);
 void FR_DrawLetter(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, char glyph, uint32_t color, Font font);
 void FR_DrawText(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, int width, int height, int margin, int glyph_spacing, int line_spacing, uint32_t fg_color, char* text, Font font);
+
+// - - - - - - Texture drawing
+void FR_DrawBinaryTexture(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, bool* tex, int width, int height, uint32_t fg_color);
+void FR_DrawBinarySpritesheet(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, bool* tex, int width, int height, int frames_x, int frames_y, int frame, uint32_t fg_color);
 
 // - - - - - - - - - - - - Post-processing
 void FR_PostprocessDither(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, float dither_strength, int n_levels, bool jitter);

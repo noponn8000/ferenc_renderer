@@ -3,7 +3,7 @@ CFLAGS  := -Wall -Wextra -O2 $(shell sdl2-config --cflags)
 LDFLAGS := $(shell sdl2-config --libs) -lm
 
 TARGET  := game
-SRC     := main.c render.c engine.c
+SRC     := main.c render.c audio.c engine.c pbm_reader.c 
 OBJ     := $(SRC:.c=.o)
 
 all: $(TARGET)

@@ -4,13 +4,16 @@
 
 Engine FE_InitEngine(PreFrameCallback pre_frame, PostFrameCallback post_frame) {
     Entity* entities = malloc(32 * sizeof(Entity));
+    Input input = { 0 };
     Engine engine = {
     	pre_frame,
 	post_frame,
+    input,
 	entities,
 	32,
 	0,
-	0
+	0,
+    0.016
     };
 
     return engine;
@@ -42,18 +45,26 @@ void FE_RemoveEntity(Engine* engine, int id) {
 	}
 }
 
-void FE_Loop(Engine* engine, RenderContext ctx) {
-	float delta = engine->preframe(NULL);
+void FE_Loop(Engine* engine, RenderContext rctx, AudioContext actx) {
+	float delta = engine->preframe(engine);
+    engine->dt = delta;
 	for (int i = 0; i < engine->entity_count; i++) {
 		Entity* e = &engine->entities[i];
-		e->c_update(e->data, delta);
-		e->c_draw(e->data, ctx);
+        if (e->c_update != NULL) {
+            e->c_update(e->data, engine->input, delta);
+        }
+        if (e->c_update != NULL) {
+		    e->c_draw(e->data, rctx);
+        }
+        if (e->c_audio != NULL) {
+            e->c_audio(e->data, actx);
+        }
 	}
 
 	// Free entities that are queued to be deleted
 	FE_Free(engine);
 	// Call post-frame callback
-	engine->postframe(NULL);
+	engine->postframe(engine, rctx, actx);
 }
 
 void FE_Free(Engine* engine) {

@@ -308,7 +308,7 @@ void FR_DrawRegularPolyRotated(uint32_t* pixels, uint16_t canvas_w, uint16_t can
 }
 
 void FR_PostprocessDither(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, float dither_strength, int n_levels, bool jitter) {
-    int x_offset, y_offset = 0;
+    int x_offset = 0; int y_offset = 0;
 
     for (int x = 0; x < canvas_w; x++) {
         for (int y = 0; y < canvas_h; y++) {
@@ -352,16 +352,8 @@ void FR_DrawLetter(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x
     if (glyph_index == -1) return;
 
     int glyphs_x = font.tex_width / font.glyph_width;
-    int x_0 = glyph_index % glyphs_x * font.glyph_width;
-    int y_0 = glyph_index / glyphs_x * font.glyph_height;
-
-    for (int j = 0; j < font.glyph_height; j++) {
-        for (int i = 0; i < font.glyph_width; i++) {
-		if (font.fonttex[(y_0 + j) * font.tex_width + (x_0 + i)] != 0) {
-            		FR_DrawPoint(pixels, canvas_w, canvas_h, x + i, y + j, color);
-	    	}
-        }
-    }
+    int glyphs_y = font.tex_height / font.glyph_height;
+    FR_DrawBinarySpritesheet(pixels, canvas_w, canvas_h, x, y, font.fonttex, font.tex_width, font.tex_height, glyphs_x, glyphs_y, glyph_index, color);
 }
 
 void FR_DrawText(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, int width, int height, int margin, int glyph_spacing, int line_spacing, uint32_t fg_color, char* text, Font font) {
@@ -383,4 +375,28 @@ void FR_DrawText(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_t
 	}
 }
 
+void FR_DrawBinaryTexture(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, bool* tex, int width, int height, uint32_t fg_color) {
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            if (tex[i * width + j])
+                FR_DrawPoint(pixels, canvas_w, canvas_h, x_tl + j, y_tl + i, fg_color);
+        }
+    }
+}
+
+void FR_DrawBinarySpritesheet(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x_tl, int y_tl, bool* tex, int width, int height, int frames_x, int frames_y, int frame, uint32_t fg_color) {
+    int frame_width = width / frames_x;
+    int frame_height = height / frames_y;
+    int x_0 = frame % frames_x * frame_width;
+    int y_0 = frame / frames_x * frame_height;
+
+    //printf("width, height, fwidth, fheight, x0, y0: %d, %d, %d, %d, %d, %d\n", width, height, frame_width, frame_height, x_0, y_0);
+    
+    for (int j = 0; j < frame_height; j++) {
+        for (int i = 0; i < frame_width; i++) {
+            if (tex[(y_0 + j) * width + (x_0 + i)])
+                FR_DrawPoint(pixels, canvas_w, canvas_h, x_tl + i, y_tl + j, fg_color);
+        }
+    }
+}
 
