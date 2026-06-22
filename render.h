@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -8,8 +10,8 @@ typedef struct {
     int glyph_width;
     int glyph_height;
     int n_glyphs;
-    char* glyphs;
-    int* lookup;
+    const char* glyphs;
+    const int* lookup;
 } Font;
 
 // Color

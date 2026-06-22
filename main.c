@@ -3,12 +3,8 @@
 #include <time.h>
 #include <string.h>
 
-#include "engine.h"
-#include "render.h"
-#include "font.h"
-#include "physics.h"
-#include "audio.h"
-#include "pbm_reader.h"
+#include "utils/textbox.h"
+#include "player.h"
 
 // SDL state
 SDL_Window   *win;
@@ -19,211 +15,6 @@ SDL_AudioDeviceID dev;
 
 // Scale factor canvas size -> window size
 #define WINDOW_SCALE_FACTOR 3
-
-typedef struct {    
-    // Textures
-    bool* texture;
-    int texWidth;
-    int texHeight;
-    // Animation
-    int framesX;
-    int framesY;
-    int frame;
-    double targetFrameTime;
-    double frameTime;
-    // Audio
-    float baseFreq;
-    // State
-    Vector2i direction;
-    Vector2f position;
-    int speed;
-    // Input
-    bool left;
-    bool right;
-    bool up;
-    bool down;
-} PlayerData;
-
-
-void PlayerInit(void* self) {
-    PlayerData* data = (PlayerData*) self;
-    data->direction.x = 0;
-    data->direction.y = 0;
-    data->position.x = 200;
-    data->position.y = 200;
-    data->left = false;
-    data->right = false;
-    data->up = false;
-    data->down = false;
-    data->speed = 30;
-
-    FILE *texFile = fopen("res/player.pbm", "rb");
-
-    data->texture = readPBM(texFile, &(data->texWidth), &(data->texHeight));
-    data->framesX = 1;
-    data->framesY = 2;
-    data->frame = 0;
-    data->frameTime = 0.0;
-    data->targetFrameTime = 0.15;
-
-    data->baseFreq = 200.0;
-
-    fclose(texFile);
-}
-
-void PlayerUpdate(void* self, Input input, float dt) {
-    PlayerData* data = (PlayerData*) self;
-
-    for (int i = 0; i < input.event_counter; i++) {
-        if (input.events[i].key == 'a') {
-            data->left = input.events[i].down;
-        }
-        else if (input.events[i].key == 'e') {
-            data->right = input.events[i].down;
-        }
-        else if (input.events[i].key == ',') {
-            data->up = input.events[i].down;
-        }
-        else if (input.events[i].key == 'o') {
-            data->down = input.events[i].down;
-        }
-    }
-
-    data->direction.x = 0; data->direction.y = 0;
-    if (data->left) data->direction.x -= 1;
-    if (data->right) data->direction.x += 1;
-    if (data->up) data->direction.y -= 1;
-    if (data->down) data->direction.y += 1;
-
-
-    data->position.x += data->speed * data->direction.x * dt;
-    data->position.y += data->speed * data->direction.y * dt;
-
-    // Animate
-    if (data->frameTime > data->targetFrameTime) {
-        data->frame = (data->frame + 1) % 2;
-        data->frameTime -= data->targetFrameTime;
-    }
-    data->frameTime += dt;
-
-    data->baseFreq += 10.0 * dt;
-    if (data->baseFreq > 800.0) data->baseFreq = 200.0;
-}
-
-void PlayerDraw(void* self, RenderContext ctx) {
-    PlayerData* data = (PlayerData*) self;
-    FR_DrawBinarySpritesheet(
-		ctx.pixels, ctx.canvas_w, ctx.canvas_h,
-		(int) data->position.x, (int) data->position.y,
-        data->texture, data->texWidth, data->texHeight,
-        data->framesX, data->framesY, data->frame,
-        0xFFFFFFFF
-    );
-
-    //FR_PostprocessDither(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 0.5, 4, false);
-}
-
-void PlayerAudio(void* self, AudioContext ctx) {
-    PlayerData* data = (PlayerData*) self;
-    int samples = ctx.streams[0].n_samples;
-
-    FR_ClearBuffer(ctx.output, samples);
-    FR_Sine(ctx.output, samples, ctx.sample_rate, ctx.t, data->baseFreq, 0.1);
-    FR_Sine(ctx.output, samples, ctx.sample_rate, ctx.t, data->baseFreq * 1.25, 0.1);
-    FR_Sine(ctx.output, samples, ctx.sample_rate, ctx.t, data->baseFreq * 1.5, 0.1);
-}
-
-typedef struct {
-    Font font;
-    int shown;
-    int cps;
-    float acc;
-    Vector2i position;
-    // In glyphs
-    Vector2i size;
-    Vector2i margin;
-    Vector2i glyphSpacing;
-    char* str;
-} TextboxData;
-
-void TextboxInit(void *self) {
-    TextboxData* data =  (TextboxData*) self;
-    FILE *texFile = fopen("res/font_halfsize.pbm", "rb");
-
-    int x; int y;
-    bool* fonttex = readPBM(texFile, &x, &y);
-    Font font = {
-        fonttex,
-        x, y,
-        FONT_GLYPH_WIDTH_SM, FONT_GLYPH_HEIGHT_SM,
-        FONT_N_GLYPHS, FONT_GLYPH_SET,
-        lookup
-    };
-
-    data->font = font;
-    data->shown = 0; data->cps = 15;
-    data->position.x = 8; data->position.y = 8;
-    data->size.x = 46; data->size.y = 8;
-    data->margin.x = 8; data->margin.y = 8;
-    data->glyphSpacing.x = 0; data->glyphSpacing.y = 4;
-    data->str = "You are a singing chalice. Revel in your new body, for you have been blessed. The nullity welcomes you into its lukewarm embrace.";
-}
-
-void TextboxDraw(void* self, RenderContext ctx) {
-    TextboxData* data =  (TextboxData*) self;
-
-    char current = data->str[0];
-    int x_0 = data->position.x + data->margin.x;
-    int y_0 = data->position.y + data->margin.y;
-    int x = x_0; int y = y_0;
-    int i = 0;
-    while (current != '\0' && i < data->size.x * data->size.y && i < data->shown) {
-        if (current == ' ') {
-            int remaining = data->size.x - (i % data->size.x);
-            int wordLen = 0;
-            // Check if we need to wrap
-            for (int k = i + 1; ; k++) {
-                char peek = data->str[k];
-                if (peek == '\0' || peek == ' ' || peek == '\n') {
-                    break;
-                }
-
-                wordLen++;
-            }
-
-            // No space found further on, so we break on this one.
-            if (wordLen >= remaining)
-                current = '\n';
-        }
-
-        if (current == '\n') {
-            x = x_0;
-            y += data->font.glyph_height + data->glyphSpacing.y;
-            current = data->str[++i];
-            continue;
-        }
-
-        FR_DrawLetter(ctx.pixels, ctx.canvas_w, ctx.canvas_h, x, y, current, 0xFFFFFFFF, data->font);
-        x += data->font.glyph_width + data->glyphSpacing.x;
-        current = data->str[++i];
-    }
-
-    FR_DrawRect(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 
-                data->position.x, data->position.y,
-                2 * data->margin.x + data->size.x * data->font.glyph_width,
-                2 * data->margin.y + data->size.y * data->font.glyph_height,
-                0xFFFFFFFF);
-}
-
-void TextboxUpdate(void* self, Input input, float dt) {
-    TextboxData* data =  (TextboxData*) self;
-
-    data->acc += dt;
-    if (data->acc > (1.0 / data->cps)) {
-        data->shown++;
-        data->acc -= (1.0 / data->cps);
-    }
-}
 
 float MyPreFrame(void* self) {
     memset(framebuffer, 0x12, 400 * 300 * sizeof(uint32_t)); // Clear framebuffer
@@ -333,29 +124,23 @@ int main(void) {
     for (int i = 0; i < N_AUDIO_STREAMS; i++) {
         AudioStream s = {
             .frames = calloc(896, sizeof(float)),
+            .volume = 0.1,
             .n_samples = 896
         };
         actx.streams[i] = s;
     }
     actx.output = calloc(896, sizeof(float));
 
-    PlayerData myPlayerData = {0};
-    Entity player = {
-        .c_init = PlayerInit,
-        .c_update = PlayerUpdate,
-        .c_draw = PlayerDraw,
-        .c_audio = PlayerAudio,
-        .data = &myPlayerData
-    };
+    char* str = "You are a singing chalice. Revel in your new body, for you have been blessed. The nullity welcomes you into its lukewarm embrace.";
+    Vector2i position = { 8, 8 };
+    Vector2i size = { 46, 8 };
+    Vector2i margin = { 8, 8 };
+    Vector2i glyphSpacing = { 0, 4 };
 
-    TextboxData myTextboxData = {0};
-    Entity textbox = {
-        .c_init = TextboxInit,
-        .c_update = TextboxUpdate,
-        .c_draw = TextboxDraw,
-        .c_audio = NULL,
-        .data = &myTextboxData
-    };
+    Entity player = PlayerConstruct();
+    Entity textbox = TextboxConstruct(
+        position, size, margin, glyphSpacing, str         
+    );
     
     FE_AddEntity(&engine, player);
     FE_AddEntity(&engine, textbox);
@@ -363,7 +148,7 @@ int main(void) {
     SDL_PauseAudioDevice(dev, 0);
     while (true) {
         FE_Loop(&engine, rctx, actx);
-        actx.t += (double)actx.streams[0].n_samples / actx.sample_rate;
+        actx.t += (float) actx.streams[0].n_samples / actx.sample_rate;
     }
 
     // Cleanup

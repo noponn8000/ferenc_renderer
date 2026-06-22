@@ -1,8 +1,10 @@
+#pragma once
+
 #include <stdint.h>
 #include <stdbool.h>
 
 #define INPUT_BUFFER_SIZE 16
-#define N_AUDIO_STREAMS 16
+#define N_AUDIO_STREAMS 2
 
 typedef struct {
 	uint32_t* pixels;
@@ -12,12 +14,14 @@ typedef struct {
 
 typedef struct {
     float* frames;
+    float volume;
     int n_samples;
 } AudioStream;
 
 typedef struct {
     AudioStream streams[N_AUDIO_STREAMS];
     float* output;
+    // Time since initialisation, in seconds
     float t;
     int sample_rate;
 } AudioContext;
@@ -54,6 +58,18 @@ typedef struct {
     void* data;
 } Entity;
 
+typedef Entity (*GetEntityFn)(int id);
+typedef Entity (*QueueFreeFn)(int id);
+typedef int (*AddEntityFn)(int id);
+
+// Engine context struct passed to callbacks
+// exposing a limited engine interface.
+typedef struct {
+    GetEntityFn get_entity;
+    QueueFreeFn queue_free;
+    AddEntityFn add_entity;
+} EngineContext;
+
 typedef struct {
     PreFrameCallback preframe;
     PostFrameCallback postframe;
@@ -69,6 +85,7 @@ Engine FE_InitEngine(PreFrameCallback pre_frame, PostFrameCallback post_frame);
 void FE_DestroyEngine(Engine* engine);
 void FE_Loop(Engine* engine, RenderContext rctx, AudioContext actx);
 void FE_Free(Engine* engine);
+void FE_MixAudio(AudioContext actx);
 
 int FE_AddEntity(Engine* engine, Entity e);
 void FE_RemoveEntity(Engine* engine, int id);

@@ -1,9 +1,9 @@
 CC      := gcc
-CFLAGS  := -Wall -Wextra -O2 $(shell sdl2-config --cflags)
+CFLAGS  := -Wall -Wextra -O2 -g $(shell sdl2-config --cflags)
 LDFLAGS := $(shell sdl2-config --libs) -lm
 
 TARGET  := game
-SRC     := main.c render.c audio.c engine.c pbm_reader.c 
+SRC     := font.c render.c audio.c engine.c pbm_reader.c player.c utils/textbox.c utils/timer.c main.c 
 OBJ     := $(SRC:.c=.o)
 
 all: $(TARGET)

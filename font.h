@@ -1,3 +1,5 @@
+#pragma once
+
 #define FONT_GLYPH_SET "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz,.!?-/{}\""
 #define FONT_GLYPH_WIDTH_LG 16
 #define FONT_GLYPH_HEIGHT_LG 16
@@ -5,6 +7,4 @@
 #define FONT_GLYPH_HEIGHT_SM 8
 #define FONT_N_GLYPHS 70
 
-const int lookup[128] = {
-61, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 54, 60, -1, -1, -1, -1, -1, -1, -1, -1, -1, 53, 56, 52, 57, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 55, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 58, -1, 59, -1, -1, 
-};
+extern const int FONT_LOOKUP_TABLE[128];

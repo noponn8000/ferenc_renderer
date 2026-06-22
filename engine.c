@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include "engine.h"
 
 Engine FE_InitEngine(PreFrameCallback pre_frame, PostFrameCallback post_frame) {
@@ -63,6 +64,10 @@ void FE_Loop(Engine* engine, RenderContext rctx, AudioContext actx) {
 
 	// Free entities that are queued to be deleted
 	FE_Free(engine);
+
+    // Mix audio streams
+    FE_MixAudio(actx);
+
 	// Call post-frame callback
 	engine->postframe(engine, rctx, actx);
 }
@@ -81,5 +86,14 @@ void FE_Free(Engine* engine) {
 			i++;
 		}
 	}
+}
+
+void FE_MixAudio(AudioContext actx) {
+    memset(actx.output, 0, actx.streams[0].n_samples * sizeof(float));
+    for (int i = 0; i < N_AUDIO_STREAMS; i++) {
+        for (int j = 0; j < actx.streams[i].n_samples; j++) {
+            actx.output[j] += actx.streams[i].volume * actx.streams[i].frames[j];
+        }
+    }
 }
 
