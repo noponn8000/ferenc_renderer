@@ -15,6 +15,7 @@ void PlayerInit(void* self) {
     FILE *texFile = fopen("res/player.pbm", "rb");
 
     data->texture = readPBM(texFile, &(data->texWidth), &(data->texHeight));
+    assert(data->texture != NULL);
     data->framesX = 1;
     data->framesY = 2;
     data->frame = 0;
@@ -88,10 +89,17 @@ void PlayerAudio(void* self, AudioContext ctx) {
     float* frames = ctx.streams[data->audioStream].frames;
 
     int freq = ((int) data->baseFreq / 20)*20;
-    FR_ClearBuffer(frames, samples);
-    FR_Sine(frames, samples, ctx.sample_rate, &data->phase[0], freq, 0.5);
-    FR_Sine(frames, samples, ctx.sample_rate, &data->phase[1], 1.25*freq, 0.5);
-    FR_Sine(frames, samples, ctx.sample_rate, &data->phase[2], 1.6*freq, 0.5);
+    FA_ClearBuffer(frames, samples);
+    FA_Sine(frames, samples, ctx.sample_rate, &data->phase[0], freq, 0.5);
+    FA_Sine(frames, samples, ctx.sample_rate, &data->phase[1], 1.25*freq, 0.5);
+    FA_Sine(frames, samples, ctx.sample_rate, &data->phase[2], 1.6*freq, 0.5);
+}
+
+void PlayerRemove(void* self) {
+    PlayerData *data = malloc(sizeof(PlayerData));
+    free(data->texture);
+
+    free(data);
 }
 
 Entity PlayerConstruct() {
@@ -101,8 +109,16 @@ Entity PlayerConstruct() {
         .c_update = PlayerUpdate,
         .c_draw = PlayerDraw,
         .c_audio = PlayerAudio,
+        .c_remove = PlayerRemove,
         .data = data
     };
 
     return player;
 }
+
+// gr: go to references
+// gd: go to definition
+// space rn: rename
+// K: hover
+// space f: format
+// space e: diagnostic

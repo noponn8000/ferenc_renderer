@@ -4,9 +4,7 @@ void TextboxInit(void *self) {
     TextboxData* data =  (TextboxData*) self;
     FILE *texFile = fopen("res/font_halfsize.pbm", "rb");
 
-    if (texFile == NULL) {
-        fprintf(stderr, "WARNING: Missing font texture!");
-    }
+    assert(texFile != NULL);
 
     int x; int y;
     bool* fonttex = readPBM(texFile, &x, &y);
@@ -21,6 +19,8 @@ void TextboxInit(void *self) {
     data->font = font;
     data->shown = 0; data->cps = 15;
     data->str = "You are a singing chalice. Revel in your new body, for you have been blessed. The nullity welcomes you into its lukewarm embrace.";
+
+    fclose(texFile);
 }
 
 void TextboxDraw(void* self, RenderContext ctx) {
@@ -79,6 +79,13 @@ void TextboxUpdate(void* self, Input input, float dt) {
     }
 }
 
+void TextboxRemove(void *self) {
+    TextboxData* data = malloc(sizeof(TextboxData)); 
+    free(data->font.fonttex);
+
+    free(data);
+}
+
 Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vector2i glyphSpacing, char* str) {
     TextboxData* data = malloc(sizeof(TextboxData)); 
     *data = (TextboxData) {
@@ -93,7 +100,7 @@ Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vecto
         .c_init = TextboxInit,
         .c_update = TextboxUpdate,
         .c_draw = TextboxDraw,
-        .c_audio = NULL,
+        .c_remove = TextboxRemove,
         .data = data
     };
 

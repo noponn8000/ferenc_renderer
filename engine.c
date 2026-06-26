@@ -21,6 +21,12 @@ Engine FE_InitEngine(PreFrameCallback pre_frame, PostFrameCallback post_frame) {
 }
 
 void FE_DestroyEngine(Engine* engine) {
+    // Call the remove functions on all entities
+    for (int i = 0; i < engine->entity_count; i++) {
+        if (engine->entities[i].c_remove != NULL)
+            engine->entities[i].c_remove(engine->entities[i].data);
+    }
+
 	free(engine->entities);
 }
 
@@ -54,7 +60,7 @@ void FE_Loop(Engine* engine, RenderContext rctx, AudioContext actx) {
         if (e->c_update != NULL) {
             e->c_update(e->data, engine->input, delta);
         }
-        if (e->c_update != NULL) {
+        if (e->c_draw != NULL) {
 		    e->c_draw(e->data, rctx);
         }
         if (e->c_audio != NULL) {

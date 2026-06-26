@@ -28,18 +28,17 @@ void TimerInit(void* self) {
 }
 
 Entity TimerConstruct(TimerCallback callback, float duration, bool oneShot) {
-    TimerData data = {
-        .callback = callback,
-        .duration = duration,
-        .oneShot = oneShot
-    };
+    TimerData* data = malloc(sizeof(TimerData));
+    data->callback = callback;
+    data->duration = duration;
+    data->oneShot = oneShot;
 
     Entity timer = {
         .c_init = TimerInit,
         .c_update = TimerUpdate,
         .c_draw = NULL,
         .c_audio = NULL,
-        .data = &data
+        .data = data
     };
 
     return timer;

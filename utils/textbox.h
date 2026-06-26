@@ -24,5 +24,6 @@ typedef struct {
 void TextboxInit(void *self);
 void TextboxDraw(void* self, RenderContext ctx);
 void TextboxUpdate(void* self, Input input, float dt);
+void TextboxRemove(void *self);
 Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vector2i glyphSpacing, char* str);
 void TextboxSetText(TextboxData *data, char* str);

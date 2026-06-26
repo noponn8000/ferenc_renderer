@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "utils/textbox.h"
+#include "utils/midiplayer.h"
 #include "player.h"
+#include "utils/array.h"
 
 // SDL state
 SDL_Window   *win;
@@ -15,6 +17,8 @@ SDL_AudioDeviceID dev;
 
 // Scale factor canvas size -> window size
 #define WINDOW_SCALE_FACTOR 3
+
+typedef darray(int) arri;
 
 float MyPreFrame(void* self) {
     memset(framebuffer, 0x12, 400 * 300 * sizeof(uint32_t)); // Clear framebuffer
@@ -90,6 +94,15 @@ void MyPostFrame(void* self, RenderContext rctx, AudioContext actx) {
 }
 
 int main(void) {
+    FILE* midiFile = fopen("res/test3.mid", "rb");
+    MIDIEventArray events = FA_readMIDI(midiFile);
+    Wavetable wt = {
+        .baseFrequency = 28,
+        .attenuationRate = 10.0
+    };
+
+    Entity midi = MIDIPlayerConstruct(&wt, events, 960, 1);
+
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     win = SDL_CreateWindow("Engine Driver", SDL_WINDOWPOS_CENTERED,
                            SDL_WINDOWPOS_CENTERED, 1200, 900,
@@ -142,8 +155,9 @@ int main(void) {
         position, size, margin, glyphSpacing, str         
     );
     
-    FE_AddEntity(&engine, player);
+    //FE_AddEntity(&engine, player);
     FE_AddEntity(&engine, textbox);
+    FE_AddEntity(&engine, midi);
 
     SDL_PauseAudioDevice(dev, 0);
     while (true) {

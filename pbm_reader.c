@@ -3,8 +3,7 @@
 #define BUFFER_SIZE 2048
 
 bool* readPBM(FILE* file, int* width, int* height) {
-    if (file == NULL)
-        return NULL;
+    assert(file != NULL);
 
     char buffer[2048];
     int x = 0; int y = 0;

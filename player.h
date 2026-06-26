@@ -38,4 +38,5 @@ void PlayerInit(void* self);
 void PlayerUpdate(void* self, Input input, float dt);
 void PlayerDraw(void* self, RenderContext ctx);
 void PlayerAudio(void* self, AudioContext ctx);
+void PlayerRemove(void* self);
 Entity PlayerConstruct();
