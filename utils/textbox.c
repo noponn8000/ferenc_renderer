@@ -2,8 +2,6 @@
 
 void TextboxInit(void *self) {
     TextboxData* data =  (TextboxData*) self;
-
-    data->shown = 0; data->cps = 15;
 }
 
 void TextboxDraw(void* self, RenderContext ctx) {
@@ -14,7 +12,7 @@ void TextboxDraw(void* self, RenderContext ctx) {
     int y_0 = data->position.y + data->margin.y;
     int x = x_0; int y = y_0;
     int i = 0;
-    while (current != '\0' && i < data->size.x * data->size.y && i < data->shown) {
+    while (current != '\0' && i < data->size.x * data->size.y && (data->shown == -1 || i < data->shown)) {
         if (current == ' ') {
             int remaining = data->size.x - (i % data->size.x);
             int wordLen = 0;
@@ -62,6 +60,7 @@ void TextboxDraw(void* self, RenderContext ctx) {
 
 void TextboxUpdate(void* self, Input input, float dt) {
     TextboxData* data =  (TextboxData*) self;
+    if (data->shown == -1) return;
 
     data->acc += dt;
     if (data->acc > (1.0 / data->cps)) {
@@ -76,7 +75,7 @@ void TextboxRemove(void *self) {
     free(data);
 }
 
-Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vector2i glyphSpacing, uint32_t fg_color, uint32_t box_color, bool fill, char* str, Font font) {
+Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vector2i glyphSpacing, uint32_t fg_color, uint32_t box_color, bool fill, int cps, char* str, Font font) {
     TextboxData* data = malloc(sizeof(TextboxData)); 
     *data = (TextboxData) {
         .position = position,
@@ -87,8 +86,15 @@ Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vecto
         .fg_color = fg_color,
         .box_color = box_color,
         .fill = fill,
+        .cps = cps,
         .font = font
     };
+
+    if (cps == -1) {
+        data->shown = -1;
+    } else {
+        data->shown = 0;
+    }
 
     Entity textbox = {
         .c_init = TextboxInit,

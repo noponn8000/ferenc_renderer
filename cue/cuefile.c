@@ -199,7 +199,7 @@ static const char* str(const char* s) {
     return s ? s : "";
 }
 
-int main(void) {
+int test_main(void) {
     CueFile cue = {0};
     FCUE_ParseCUE("res/test2.cue", &cue);
 

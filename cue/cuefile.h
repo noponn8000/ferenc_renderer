@@ -16,4 +16,5 @@ typedef struct {
     CueTrackArray tracks;
 } CueFile;
 
+bool FCUE_ParseCUE(char* path, CueFile* cue);
 uint8_t FCUE_ParseTimestamp(CueTimestamp* timestamp, char* stamp);
