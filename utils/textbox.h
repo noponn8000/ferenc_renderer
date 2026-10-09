@@ -2,11 +2,11 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include "../engine.h"
-#include "../physics.h"
-#include "../pbm_reader.h"
-#include "../render.h"
-#include "../font.h"
+#include "../engine/engine.h"
+#include "../physics/physics.h"
+#include "../utils/pbm_reader.h"
+#include "../renderer/render.h"
+#include "../ui/font.h"
 
 typedef struct {
     Font font;

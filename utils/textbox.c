@@ -80,8 +80,7 @@ void TextboxUpdate(void* self, Input input, float dt) {
 }
 
 void TextboxRemove(void *self) {
-    TextboxData* data = malloc(sizeof(TextboxData)); 
-    free(data->font.fonttex);
+    TextboxData* data = (TextboxData*) self;
 
     free(data);
 }

@@ -1,5 +1,5 @@
-#include "../engine.h"
-#include "../audio.h"
+#include "../engine/engine.h"
+#include "../audio/audio.h"
 
 typedef struct {
     Wavetable* wt;
