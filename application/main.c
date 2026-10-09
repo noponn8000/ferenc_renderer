@@ -38,6 +38,12 @@ float MyPreFrame(void* self) {
                 eng->input.mouseX = (int) e.motion.x / WINDOW_SCALE_FACTOR;
                 eng->input.mouseY = (int) e.motion.y / WINDOW_SCALE_FACTOR;
                 break;
+            case SDL_MOUSEBUTTONDOWN:
+                eng->input.mouseButton[e.button.button] = true;
+                break;
+            case SDL_MOUSEBUTTONUP:
+                eng->input.mouseButton[e.button.button] = false;
+                break;
             case SDL_KEYDOWN:
                 if (eng->input.event_counter < INPUT_BUFFER_SIZE) {
                     InputEvent ev = { e.key.keysym.sym, true };

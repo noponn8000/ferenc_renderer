@@ -34,7 +34,7 @@ typedef struct {
 typedef struct {
     InputEvent events[INPUT_BUFFER_SIZE];
     uint8_t event_counter;
-    uint8_t mouseButton;
+    bool mouseButton[3];
     int mouseX;
     int mouseY;
 } Input;
