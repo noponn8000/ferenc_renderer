@@ -22,7 +22,17 @@ Provides ready-made implementations of common systems:
 - Textbox
 - Timer
 
+# UI
+
+Basic UI components
+
+- Button
+
 More to be added.
+
+# Example Applications
+
+CUE sheet supporting music player (uses miniaudio.h)
 
 # Comment on dependencies
 
