@@ -2,25 +2,8 @@
 
 void TextboxInit(void *self) {
     TextboxData* data =  (TextboxData*) self;
-    FILE *texFile = fopen("res/font_halfsize.pbm", "rb");
 
-    assert(texFile != NULL);
-
-    int x; int y;
-    bool* fonttex = readPBM(texFile, &x, &y);
-    Font font = {
-        fonttex,
-        x, y,
-        FONT_GLYPH_WIDTH_SM, FONT_GLYPH_HEIGHT_SM,
-        FONT_N_GLYPHS, FONT_GLYPH_SET,
-        FONT_LOOKUP_TABLE
-    };
-
-    data->font = font;
     data->shown = 0; data->cps = 15;
-    data->str = "You are a singing chalice. Revel in your new body, for you have been blessed. The nullity welcomes you into its lukewarm embrace.";
-
-    fclose(texFile);
 }
 
 void TextboxDraw(void* self, RenderContext ctx) {
@@ -57,16 +40,24 @@ void TextboxDraw(void* self, RenderContext ctx) {
             continue;
         }
 
-        FR_DrawLetter(ctx.pixels, ctx.canvas_w, ctx.canvas_h, x, y, current, 0xFFFFFFFF, data->font);
+        FR_DrawLetter(ctx.pixels, ctx.canvas_w, ctx.canvas_h, x, y, current, data->fg_color, data->font);
         x += data->font.glyph_width + data->glyphSpacing.x;
         current = data->str[++i];
     }
 
-    FR_DrawRect(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 
-                data->position.x, data->position.y,
-                2 * data->margin.x + data->size.x * data->font.glyph_width,
-                2 * data->margin.y + data->size.y * data->font.glyph_height,
-                0xFFFFFFFF);
+    if (data->fill) {
+        FR_DrawRectFill(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 
+                    data->position.x, data->position.y,
+                    2 * data->margin.x + data->size.x * data->font.glyph_width,
+                    2 * data->margin.y + data->size.y * data->font.glyph_height,
+                    data->box_color);
+    } else {
+        FR_DrawRect(ctx.pixels, ctx.canvas_w, ctx.canvas_h, 
+                    data->position.x, data->position.y,
+                    2 * data->margin.x + data->size.x * data->font.glyph_width,
+                    2 * data->margin.y + data->size.y * data->font.glyph_height,
+                    data->box_color);
+    }
 }
 
 void TextboxUpdate(void* self, Input input, float dt) {
@@ -85,14 +76,18 @@ void TextboxRemove(void *self) {
     free(data);
 }
 
-Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vector2i glyphSpacing, char* str) {
+Entity TextboxConstruct(Vector2i position, Vector2i size, Vector2i margin, Vector2i glyphSpacing, uint32_t fg_color, uint32_t box_color, bool fill, char* str, Font font) {
     TextboxData* data = malloc(sizeof(TextboxData)); 
     *data = (TextboxData) {
         .position = position,
         .size = size,
         .margin = margin,
         .glyphSpacing = glyphSpacing,
-        .str = str
+        .str = str,
+        .fg_color = fg_color,
+        .box_color = box_color,
+        .fill = fill,
+        .font = font
     };
 
     Entity textbox = {

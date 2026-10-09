@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #define darray(T) struct { \
     T *items; \
     size_t count;\

@@ -349,7 +349,9 @@ void FR_PostprocessDither(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h
 }
 
 void FR_DrawLetter(uint32_t *pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, char glyph, uint32_t color, Font font) {
-    int glyph_index = font.lookup[glyph];
+    unsigned char g = (unsigned char)glyph;
+    if (g >= 128) return;
+    int glyph_index = font.lookup[g];
     if (glyph_index == -1) return;
 
     int glyphs_x = font.tex_width / font.glyph_width;

@@ -12,6 +12,7 @@ typedef struct {
     int n_glyphs;
     const char* glyphs;
     const int* lookup;
+    const uint32_t* codepoints;
 } Font;
 
 // Color
