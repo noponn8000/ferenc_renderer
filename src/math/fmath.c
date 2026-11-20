@@ -1,0 +1,82 @@
+#include "fmath.h"
+#include <math.h>
+
+vec2 mat2vec2mul(mat2 a, vec2 v) {
+    return (vec2) {
+        v.x * a.a + v.y * a.b,
+        v.x * a.c + v.y * a.d
+    };
+}
+
+vec3 mat3vec3mul(mat3 a, vec3 v) {
+    return (vec3) {
+        v.x * a.a + v.y * a.b + v.z * a.c,
+        v.x * a.d + v.y * a.e + v.z * a.f,
+        v.x * a.g + v.y * a.h + v.z * a.i,
+    };
+}
+
+vec4 mat4vec4mul(mat4 a, vec4 v) {
+    return (vec4) {
+        v.x * a.a + v.y * a.b + v.z * a.c + v.w * a.d,
+        v.x * a.e + v.y * a.f + v.z * a.g + v.w * a.h,
+        v.x * a.i + v.y * a.j + v.z * a.k + v.w * a.l,
+        v.x * a.m + v.y * a.n + v.z * a.o + v.w * a.p,
+    };
+}
+
+mat2 mat2mat2mul(mat2 a, mat2 b) {
+    mat2 r;
+
+    r.a = a.a * b.a + a.b * b.c;
+    r.b = a.a * b.b + a.b * b.d;
+
+    r.c = a.c * b.a + a.d * b.c;
+    r.d = a.c * b.b + a.d * b.d;
+
+    return r;
+}
+
+mat3 mat3mat3mul(mat3 a, mat3 b) {
+    mat3 r;
+
+    r.a = a.a * b.a + a.b * b.d + a.c * b.g;
+    r.b = a.a * b.b + a.b * b.e + a.c * b.h;
+    r.c = a.a * b.c + a.b * b.f + a.c * b.i;
+
+    r.d = a.d * b.a + a.e * b.d + a.f * b.g;
+    r.e = a.d * b.b + a.e * b.e + a.f * b.h;
+    r.f = a.d * b.c + a.e * b.f + a.f * b.i;
+
+    r.g = a.g * b.a + a.h * b.d + a.i * b.g;
+    r.h = a.g * b.b + a.h * b.e + a.i * b.h;
+    r.i = a.g * b.c + a.h * b.f + a.i * b.i;
+
+    return r;
+}
+
+mat4 mat4mat4mul(mat4 a, mat4 b) {
+    mat4 r;
+
+    r.a = a.a*b.a + a.b*b.e + a.c*b.i  + a.d*b.m;
+    r.b = a.a*b.b + a.b*b.f + a.c*b.j  + a.d*b.n;
+    r.c = a.a*b.c + a.b*b.g + a.c*b.k  + a.d*b.o;
+    r.d = a.a*b.d + a.b*b.h + a.c*b.l  + a.d*b.p;
+
+    r.e = a.e*b.a + a.f*b.e + a.g*b.i  + a.h*b.m;
+    r.f = a.e*b.b + a.f*b.f + a.g*b.j  + a.h*b.n;
+    r.g = a.e*b.c + a.f*b.g + a.g*b.k  + a.h*b.o;
+    r.h = a.e*b.d + a.f*b.h + a.g*b.l  + a.h*b.p;
+
+    r.i = a.i*b.a + a.j*b.e + a.k*b.i  + a.l*b.m;
+    r.j = a.i*b.b + a.j*b.f + a.k*b.j  + a.l*b.n;
+    r.k = a.i*b.c + a.j*b.g + a.k*b.k  + a.l*b.o;
+    r.l = a.i*b.d + a.j*b.h + a.k*b.l  + a.l*b.p;
+
+    r.m = a.m*b.a + a.n*b.e + a.o*b.i  + a.p*b.m;
+    r.n = a.m*b.b + a.n*b.f + a.o*b.j  + a.p*b.n;
+    r.o = a.m*b.c + a.n*b.g + a.o*b.k  + a.p*b.o;
+    r.p = a.m*b.d + a.n*b.h + a.o*b.l  + a.p*b.p;
+
+    return r;
+}
