@@ -104,7 +104,7 @@ float MyPreFrame(void* self) {
     	float nx = CANVAS_WIDTH; float ny = CANVAS_HEIGHT;
     	mat4 m_vp = {
     		nx / 2,    0, 0, (nx - 1) / 2,
-    		     0, ny/2, 0, (ny - 1) / 2,
+    		     0, -ny/2, 0, (ny - 1) / 2,
     		     0,    0, 1, 			0,
     		     0,    0, 0, 			1
     	};

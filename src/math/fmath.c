@@ -176,7 +176,7 @@ mat4 mat4viewport(uint16_t canvas_w, uint16_t canvas_h) {
     float ny = (float) canvas_h;
     return (mat4) {
     	nx / 2,    0, 0, (nx - 1) / 2,
-    	     0, ny/2, 0, (ny - 1) / 2,
+    	     0, -ny/2, 0, (ny - 1) / 2,
     	     0,    0, 1, 			0,
     	     0,    0, 0, 			1
     };
