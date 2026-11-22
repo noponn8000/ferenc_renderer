@@ -1,39 +1,25 @@
 # Ferenc Renderer
 
+![cube](screenshot.png "Textured cube rendered in perspective projection")
+
 Provides software rendering functions such as:
 
 - Rendering various shapes (squares, circles, polygons)
-- Rendering .pbm texters
+- Rendering triangles
+	- 2D barycentric
+	- 3D with vertex colors
+	- 3D with UVs and texture
+- Rendering .pbm textures
 - Basic postprocessing 
 
-# Ferenc Audio
+## Ferenc Audio
 
 Provides functions for reading and playing MIDI files using sinusoidal software synthesis.
 
-# Ferenc Engine
+## Ferenc Engine
 
 Provides a lightweight "game engine" and allows for the creation of entities with draw/update/audio callbacks.
 
-# Utils
-
-Provides ready-made implementations of common systems:
-
-- MIDI player
-- Textbox
-- Timer
-
-# UI
-
-Basic UI components
-
-- Button
-
-More to be added.
-
-# Example Applications
-
-CUE sheet supporting music player (uses miniaudio.h)
-
-# Comment on dependencies
+## Comment on dependencies
 
 Each module is platform-agnostic, i.e., it is oblivious to what windowing or audio backend is used. The example `main.c` file uses SDL2, but it can easily be adapted to other libraries. Further, each module only depends on the C standard library and uses only C99 features.
