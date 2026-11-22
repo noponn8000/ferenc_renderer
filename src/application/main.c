@@ -9,17 +9,53 @@
 #include <renderer/render.h>
 #include <renderer/colors.h>
 #include <math/fmath.h>
+#include <utils/pbm_reader.h>
 
 // SDL state
 SDL_Window   *win;
 SDL_Renderer *ren;
 SDL_Texture  *scrtex;
-uint32_t     *framebuffer;
+// framebuffer
+uint32_t     *fb;
+// Depth buffer
+float		 *db;
 SDL_AudioDeviceID dev;
 bool running = true;
 
 // Data
+uint32_t* cube_tex;
+uint16_t cube_tex_width;
+uint16_t cube_tex_height;
+
+// For rotating objects periodically
 float theta;
+
+// ---- Camera
+// Perspective vs. ortohgraphic
+bool perspective = true;
+
+// Where the camera is looking at
+vec3 target = { 0 };
+// Distance from target
+float distance = 5.0f;
+// Rotation
+float pitch = 0.0f;
+float yaw = 0.0f;
+
+float mouseXPrev = -1.0f;
+float mouseYPrev = -1.0f;
+
+const float MOUSE_SENSITIVITY = 3.5;
+const float MAX_PITCH = 1.2;
+
+// Orthographic view volume
+// Assuming the view volume looks at the negative z-axis, with the up-direction being the positive y-axis
+float l = -0.8f;
+float r =  0.8f;
+float b = -0.8f;
+float t =  0.8f;
+float n =  -1.0f;
+float f = -100.0f;
 
 // Scale factor canvas size -> window size
 #define WINDOW_SCALE_FACTOR 1
@@ -27,10 +63,42 @@ float theta;
 #define CANVAS_WIDTH 800
 
 float MyPreFrame(void* self) {
-    memset(framebuffer, 0xFFFBFBFB, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(uint32_t)); // Clear framebuffer
+    memset(fb, 0xFFFBFBFB, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(uint32_t)); // Clear framebuffer
 
 	// Spinning cube in orthographic projection
 	if (true) {
+    	float cospitch = cosf(pitch);
+    	float sinpitch = sinf(pitch);
+    	float cosyaw = cosf(yaw);
+    	float sinyaw = sinf(yaw);
+    	// Eye position
+    	vec3 e = {
+        	target.x + distance * cospitch * sinyaw,
+        	target.y + distance * sinpitch,
+        	target.z + distance * cospitch * cosyaw
+    	};
+
+		// Gaze direction
+		vec3 g = vec3dir(vec3sub(target, e));
+
+		// View-up vector
+    	vec3 up = {
+        	0, 1, 0
+    	};
+
+    	// Construct orthonormal basis from g, up
+    	vec3 w = vec3scale(g, -1.0); 
+    	vec3 u = vec3cross(up, w);
+    	vec3 v = vec3cross(w, u);
+
+		// camera transform matrix
+		mat4 m_cam = {
+    		u.x, u.y, u.z, -vec3dot(u, e),
+    		v.x, v.y, v.z, -vec3dot(v, e),
+    		w.x, w.y, w.z, -vec3dot(w, e),
+    		0,   0,   0,   1
+		};
+
     	// viewport matrix
     	// canonical view volume -> screen space
     	float nx = CANVAS_WIDTH; float ny = CANVAS_HEIGHT;
@@ -41,60 +109,57 @@ float MyPreFrame(void* self) {
     		     0,    0, 0, 			1
     	};
 
-    	// Orthographic view volume
-    	// Assuming the view volume looks at the negative z-axis, with the up-direction being the positive y-axis
-        float l = -2.0f;
-        float r =  2.0f;
-        float b = -2.0f;
-        float t =  2.0f;
-        float n =  0.1f;
-        float f = 10.0f;
+        memset(db, -10000, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(float));
 
-    	vec3 cube_edges[] = {
-        // Bottom face
-        {-1, -1, -1}, { 1, -1, -1},
-        { 1, -1, -1}, { 1, -1,  1},
-        { 1, -1,  1}, {-1, -1,  1},
-        {-1, -1,  1}, {-1, -1, -1},
-
-        // Top face
-        {-1,  1, -1}, { 1,  1, -1},
-        { 1,  1, -1}, { 1,  1,  1},
-        { 1,  1,  1}, {-1,  1,  1},
-        {-1,  1,  1}, {-1,  1, -1},
-
-        // Connecting edges
-        {-1, -1, -1}, {-1,  1, -1},
-        { 1, -1, -1}, { 1,  1, -1},
-        { 1, -1,  1}, { 1,  1,  1},
-        {-1, -1,  1}, {-1,  1,  1}
+        vec3 cube_vertices[24] = {
+            // front (+z)
+            {-1,-1, 1}, { 1,-1, 1}, { 1, 1, 1}, {-1, 1, 1},
+            // top (+y)
+            {-1, 1,-1}, {-1, 1, 1}, { 1, 1, 1}, { 1, 1,-1},
+            // bottom (-y)
+            {-1,-1,-1}, { 1,-1,-1}, { 1,-1, 1}, {-1,-1, 1},
+            // left (-x)
+            {-1,-1,-1}, {-1,-1, 1}, {-1, 1, 1}, {-1, 1,-1},
+            // right (+x)
+            { 1,-1,-1}, { 1, 1,-1}, { 1, 1, 1}, { 1,-1, 1},
+            // back (-z)
+            {-1,-1,-1}, {-1, 1,-1}, { 1, 1,-1}, { 1,-1,-1},
         };
 
-		// spin faster in the x axis than y
-        mat4 rot_x = {
-            cos(theta * 2), 0, sin(theta * 2), 0,
-            0, 1, 0, 0,
-            -sin(theta * 2), 0, cos(theta * 2), 0,
-            0, 0, 0, 1
+        int cube_tris[] = {
+             0,  1,  2,    0,  2,  3,   // front
+             4,  5,  6,    4,  6,  7,   // top
+             8,  9, 10,    8, 10, 11,   // bottom
+            12, 13, 14,   12, 14, 15,   // left
+            16, 17, 18,   16, 18, 19,   // right
+            20, 21, 22,   20, 22, 23,   // back
         };
 
-        mat4 rot_y = {
-            1, 0, 0, 0,
-            0, cos(theta), -sin(theta), 0,
-            0, sin(theta), cos(theta), 0,
-            0, 0, 0, 1
+        vec2 cube_uvs[] = {
+            // front
+            {0.25f, 0.66666667f}, {0.5f,  0.66666667f}, {0.5f,  0.33333333f}, {0.25f, 0.33333333f},
+            // top
+            {0.25f, 0.0f},        {0.25f, 0.33333333f}, {0.5f,  0.33333333f}, {0.5f,  0.0f},
+            // bottom
+            {0.25f, 1.0f},        {0.5f,  1.0f},        {0.5f,  0.66666667f}, {0.25f, 0.66666667f},
+            // left
+            {0.0f,  0.66666667f}, {0.25f, 0.66666667f}, {0.25f, 0.33333333f}, {0.0f,  0.33333333f},
+            // right
+            {0.75f, 0.66666667f}, {0.75f, 0.33333333f}, {0.5f,  0.33333333f}, {0.5f,  0.66666667f},
+            // back
+            {1.0f,  0.66666667f}, {1.0f,  0.33333333f}, {0.75f, 0.33333333f}, {0.75f, 0.66666667f},
         };
 
-		// Scale it with the sin function so that it shrinks and grows periodically
-        mat4 scale = {
-            1 + 0.5*sin(theta), 0, 0, 0,
-            0, 1 + 0.5*sin(theta), 0, 0,
-            0, 0, 1 + 0.5*sin(theta), 0,
-            0, 0, 0, 1
+        uint32_t vertex_colors[] = {
+            BROWN, BROWN, BROWN, BROWN, GRAY, GRAY, GRAY, GRAY,
         };
 
-        mat4 m_model = mat4mat4mul(rot_x, rot_y);
-        m_model = mat4mat4mul(scale, m_model);
+        mat4 m_model = (mat4) {
+			1, 0, 0, 0,
+			0, 1, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1
+        };
 
     	mat4 m_orth = {
         	2/(r - l),       0,       0, -(r+l)/(r-l),
@@ -103,18 +168,50 @@ float MyPreFrame(void* self) {
         	        0,       0,       0, 			1
     	};
 
-    	mat4 m = mat4mat4mul(m_vp, m_orth);
+    	mat4 m_perspective = {
+        	n, 0, 0, 0,
+        	0, n, 0, 0,
+        	0, 0, n + f, -f * n,
+        	0, 0, 1, 0
+    	};
 
-    	for (size_t i = 0; i < (size_t) sizeof(cube_edges) / sizeof(vec3); i += 2) {
-    		vec4 p = { vec3dc(cube_edges[i]), 1};
-    		vec4 q = { vec3dc(cube_edges[i + 1]), 1};
+		mat4 m;
+		// Perspective
+		if (perspective) {
+        	m = mat4mat4mul(m_perspective, m_cam);
+		} else {
+    		m = m_cam;
+		}
+    	m = mat4mat4mul(m_orth, m);
+    	m = mat4mat4mul(m_vp, m);
 
+    	for (size_t i = 0; i < (size_t) sizeof(cube_tris) / sizeof(int); i += 3) {
+        	vec4 p = { vec3dc(cube_vertices[cube_tris[i]]), 1 };
+        	vec4 q = { vec3dc(cube_vertices[cube_tris[i + 1]]), 1 };
+        	vec4 r = { vec3dc(cube_vertices[cube_tris[i + 2]]), 1 };
+
+			// Model to world
     		p = mat4vec4mul(m_model, p);
     		q = mat4vec4mul(m_model, q);
+    		r = mat4vec4mul(m_model, r);
 
     		p = mat4vec4mul(m, p);
     		q = mat4vec4mul(m, q);
-    		FR_DrawLine(framebuffer, CANVAS_WIDTH, CANVAS_HEIGHT, p.x, p.y, q.x, q.y, MAGENTA);
+    		r = mat4vec4mul(m, r);
+
+    		// Perspective - leave w alone for interpolation
+    		if (perspective) {
+        		p.x /= p.w; p.y /= p.w; p.z /= p.w;
+        		q.x /= q.w; q.y /= q.w; q.z /= q.w;
+        		r.x /= r.w; r.y /= r.w; r.z /= r.w;
+    		}
+
+    		//FR_DrawTriangle3DVC(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r), vertex_colors[cube_tris[i]], vertex_colors[cube_tris[i + 1]], vertex_colors[cube_tris[i + 2]]);
+    		FR_DrawTriangle3DUV(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r),
+								vec2dc(cube_uvs[cube_tris[i]]), vec2dc(cube_uvs[cube_tris[i + 1]]), vec2dc(cube_uvs[cube_tris[i + 2]]),
+    		                    cube_tex, cube_tex_width, cube_tex_height,
+    		                    FR_SampleNearest
+    		);
     	}
 	}
 
@@ -135,8 +232,8 @@ float MyPreFrame(void* self) {
     	v2 = mat3vec3mul(rotate_translate, v2);
     	v3 = mat3vec3mul(rotate_translate, v3);
     	
-        FR_DrawCircleFill(framebuffer, CANVAS_WIDTH, CANVAS_HEIGHT, 300, 300, 50.0f, MAGENTA);
-        FR_DrawTriangle2DVC(framebuffer, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(v1), vec2dc(v2), vec2dc(v3), RED, GREEN, BLUE);
+        FR_DrawCircleFill(fb, CANVAS_WIDTH, CANVAS_HEIGHT, 300, 300, 50.0f, MAGENTA);
+        FR_DrawTriangle2DVC(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(v1), vec2dc(v2), vec2dc(v3), RED, GREEN, BLUE);
 	}
     
     SDL_Event e;
@@ -194,13 +291,42 @@ float MyPreFrame(void* self) {
 
 void MyPostFrame(void* self, RenderContext rctx, AudioContext actx) {
     Engine* engine = (Engine*) self;
+
+    for (int i = 0; i < engine->input.event_counter; i++) {
+        if (engine->input.events[i].down) {
+            if (engine->input.events[i].key == 'p') {
+                distance -= 0.5;
+            } else if (engine->input.events[i].key == '.') {
+                distance += 0.5;
+            } else if (engine->input.events[i].key == 'y') {
+                perspective = !perspective;
+            }
+        }
+    }
+
+	if (engine->input.mouseButton[0]) {
+		float dx = ((float) engine->input.mouseX - mouseXPrev) / (CANVAS_WIDTH * WINDOW_SCALE_FACTOR);
+		float dy = ((float) engine->input.mouseY - mouseYPrev) / (CANVAS_HEIGHT * WINDOW_SCALE_FACTOR);
+
+		yaw -= dx * MOUSE_SENSITIVITY;
+		pitch += dy * MOUSE_SENSITIVITY;
+
+		if (pitch > MAX_PITCH) {
+    		pitch = MAX_PITCH; 
+		} else if (pitch < -MAX_PITCH) {
+    		pitch = -MAX_PITCH;
+		}
+    }
+	mouseXPrev = engine->input.mouseX;
+	mouseYPrev = engine->input.mouseY;
+
     // Upload framebuffer to SDL Texture
     void *tex_pixels;
     int pitch;
     SDL_LockTexture(scrtex, NULL, &tex_pixels, &pitch);
     
     uint8_t *dst = (uint8_t *)tex_pixels;
-    uint8_t *src = (uint8_t *)framebuffer;
+    uint8_t *src = (uint8_t *)fb;
     for (int y = 0; y < CANVAS_HEIGHT; y++) {
         memcpy(dst, src, CANVAS_WIDTH * sizeof(uint32_t));
         dst += pitch;
@@ -216,7 +342,7 @@ void MyPostFrame(void* self, RenderContext rctx, AudioContext actx) {
         dev,
         actx.output,
         actx.streams[0].n_samples * sizeof(float)
-);
+    );
 }
 
 int main(void) {
@@ -226,10 +352,21 @@ int main(void) {
                            SDL_WINDOW_BORDERLESS);
     ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     scrtex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
-    framebuffer = calloc(CANVAS_WIDTH * CANVAS_HEIGHT, sizeof(uint32_t));
+    fb = calloc(CANVAS_WIDTH * CANVAS_HEIGHT, sizeof(uint32_t));
+    db = calloc(CANVAS_WIDTH * CANVAS_HEIGHT, sizeof(float));
 
     Engine engine = FE_InitEngine(MyPreFrame, MyPostFrame);
-    RenderContext rctx = { framebuffer, CANVAS_WIDTH, CANVAS_HEIGHT };
+    RenderContext rctx = { fb, CANVAS_WIDTH, CANVAS_HEIGHT };
+
+	FILE* texFile = fopen("res/cube.ppm", "r");
+	if (texFile == NULL) {
+    	exit(1);
+	}
+    cube_tex = readPPM(texFile, &cube_tex_width, &cube_tex_height);
+    printf("Texture dims: %u, %u\n", cube_tex_width, cube_tex_height);
+    if (cube_tex == NULL) {
+        exit(1);
+    }
 
     while (running) {
         FE_Loop(&engine, rctx, (AudioContext) {0});
@@ -237,5 +374,9 @@ int main(void) {
 
     // Cleanup
     FE_DestroyEngine(&engine);
+
+    free(fb);
+    free(db);
+    free(cube_tex);
     return 0;
 }

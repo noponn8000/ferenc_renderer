@@ -61,9 +61,20 @@ vec2 vec2add(vec2 a, vec2 b);
 vec3 vec3add(vec3 a, vec3 b);
 vec4 vec4add(vec4 a, vec4 b);
 
+vec2 vec2sub(vec2 a, vec2 b);
+vec3 vec3sub(vec3 a, vec3 b);
+vec4 vec4sub(vec4 a, vec4 b);
+
+float vec3norm(vec3 v);
+
+vec3 vec3dir(vec3 v);
+
 float vec2dot(vec2 a, vec2 b);
 float vec3dot(vec3 a, vec3 b);
 float vec4dot(vec4 a, vec4 b);
+
+vec3 vec3cross(vec3 a, vec3 b);
+vec4 vec4cross(vec4 a, vec4 b);
 
 float mat2det(mat2 a);
 float mat3det(mat3 a);

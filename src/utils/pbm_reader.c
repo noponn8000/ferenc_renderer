@@ -58,14 +58,20 @@ bool parseNetPBMHeader(char* buffer, int n_bytes, int* x, int* y, int* bodyStart
     return true;
 }
 
-uint32_t* readPPM(FILE* file, int* width, int* height) {
+uint32_t* readPPM(FILE* file, uint16_t* width, uint16_t* height) {
     assert(file != NULL);
 
-    char buffer[16384];
+    fseek(file, 0, SEEK_END);
+    uint64_t fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    if (fileSize <= 0) return NULL;
+
+    char* buffer = malloc(fileSize);
+    if (!buffer) return NULL;
+
     int x = 0; int y = 0;
 
-    size_t bytesRead = fread(buffer, 1, sizeof(buffer) - 1, file);
-    printf("%u\n", bytesRead);
+    size_t bytesRead = fread(buffer, 1, fileSize, file);
     int i;
 
     assert(parseNetPBMHeader(buffer, bytesRead, &x, &y, &i, P6));
@@ -91,10 +97,11 @@ uint32_t* readPPM(FILE* file, int* width, int* height) {
     }
 
     *width = x; *height = y;
+    free(buffer);
     return tex;
 }
 
-bool* readPBM(FILE* file, int* width, int* height) {
+bool* readPBM(FILE* file, uint16_t* width, uint16_t* height) {
     assert(file != NULL);
 
     char buffer[2048];

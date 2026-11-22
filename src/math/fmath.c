@@ -1,4 +1,5 @@
 #include "fmath.h"
+#include <stdint.h>
 #include <math.h>
 
 vec2 mat2vec2mul(mat2 a, vec2 v) {
@@ -80,3 +81,136 @@ mat4 mat4mat4mul(mat4 a, mat4 b) {
 
     return r;
 }
+
+float vec3dot(vec3 a, vec3 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+float vec3norm(vec3 v) {
+    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+vec3 vec3dir(vec3 v) {
+    return vec3scale(v, 1.0/vec3norm(v));
+}
+
+vec3 vec3scale(vec3 v, float s) {
+    return (vec3) {
+        v.x * s,
+        v.y * s,
+        v.z * s
+    };
+}
+
+vec3 vec3sub(vec3 a, vec3 b) {
+    return (vec3) {
+        a.x - b.x,
+        a.y - b.y,
+        a.z - b.z
+    };
+}
+
+vec3 vec3add(vec3 a, vec3 b) {
+    return (vec3) {
+        a.x + b.x,
+        a.y + b.y,
+        a.z + b.z
+    };
+}
+
+vec4 vec4scale(vec4 v, float s) {
+    return (vec4) {
+        v.x * s,
+        v.y * s,
+        v.z * s,
+        v.w * s
+    };
+}
+
+vec3 vec3cross(vec3 a, vec3 b) {
+	return (vec3) {
+    	a.y * b.z - a.z * b.y,
+    	a.z * b.x - a.x * b.z,
+    	a.x * b.y - a.y * b.x
+    };
+}
+
+mat4 mat4homrotx(float theta) {
+	return (mat4) {
+         cos(theta), 0, sin(theta), 0,
+                  0, 1,          0, 0,
+        -sin(theta), 0, cos(theta), 0,
+                  0, 0,          0, 1
+    };
+}
+
+mat4 mat4homroty(float theta) {
+    return (mat4) {
+        1, 0, 0, 0,
+        0, cos(theta), -sin(theta), 0,
+        0, sin(theta), cos(theta), 0,
+        0, 0, 0, 1
+    };
+}
+
+mat4 mat4homrotz(float theta) {
+	return (mat4) {
+		cos(theta), -sin(theta), 0, 0,
+		sin(theta), cos(theta), 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	};
+}
+
+mat4 mat4trans(vec3 trans) {
+    return (mat4) {
+        1, 0, 0, trans.x,
+        0, 1, 0, trans.y,
+        0, 0, 1, trans.z,
+        0, 0, 0, 1
+    };
+}
+
+mat4 mat4viewport(uint16_t canvas_w, uint16_t canvas_h) {
+    float nx = (float) canvas_w;
+    float ny = (float) canvas_h;
+    return (mat4) {
+    	nx / 2,    0, 0, (nx - 1) / 2,
+    	     0, ny/2, 0, (ny - 1) / 2,
+    	     0,    0, 1, 			0,
+    	     0,    0, 0, 			1
+    };
+}
+
+mat4 mat4orthographic(float l, float r, float b, float t, float n, float f) {
+	return (mat4) {
+    	2/(r - l),       0,       0, -(r+l)/(r-l),
+    	        0, 2/(t-b),       0, -(t+b)/(t-b),
+    	        0,       0, 2/(n-f), -(n+f)/(n-f),
+    	        0,       0,       0, 			1
+	};
+}
+
+mat4 mat4camera(vec3 e, vec3 g, vec3 t) {
+	vec3 w = vec3scale(g, -1.0); 
+	vec3 u = vec3cross(t, w);
+	vec3 v = vec3cross(w, u);
+
+	return (mat4) {
+		u.x, u.y, u.z, -vec3dot(u, e),
+		v.x, v.y, v.z, -vec3dot(v, e),
+		w.x, w.y, w.z, -vec3dot(w, e),
+		0,   0,   0,   1
+	};
+}
+
+mat4 mat4perspective(float n, float f) {
+    return (mat4) {
+    	n, 0, 0, 0,
+    	0, n, 0, 0,
+    	0, 0, n + f, -f * n,
+    	0, 0, 1, 0
+    };
+}
+
+

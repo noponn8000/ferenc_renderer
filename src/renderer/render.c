@@ -1,4 +1,5 @@
 #include "render.h"
+#include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
 
@@ -69,6 +70,22 @@ uint32_t FR_LookPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, in
     }
 
     return pixels[y * canvas_w + x];
+}
+
+float FR_SampleDepth(float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h, int x, int y) {
+    if (x >= canvas_w || x < 0 || y >= canvas_h || y < 0) {
+        return NAN;
+    }
+
+    return depth_buffer[y * canvas_w + x];
+}
+
+void FR_SetDepth(float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h, int x, int y, float depth) {
+    if (x >= canvas_w || x < 0 || y >= canvas_h || y < 0) {
+        return;
+    }
+
+    depth_buffer[y * canvas_w + x] = depth;
 }
 
 void FR_DrawCircleFill(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x, int y, uint16_t radius, uint32_t color) {
@@ -459,6 +476,14 @@ void FR_DrawTriangle2DVC(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h,
    	float beta = (m20.x * xmin + m20.y * ymin + x2 * y0 - x0 * y2) / betaden;
    	float gamma = (m01.x * xmin + m01.y * ymin + x0 * y1 - x1 * y0) / gammaden;
 
+   	float dxgamma = m01.x / gammaden;
+    float dxalpha = m12.x / alphaden;
+    float dxbeta = m20.x / betaden;
+
+   	float dygamma = m01.y / gammaden;
+    float dyalpha = m12.y / alphaden;
+    float dybeta = m20.y / betaden;
+
    	for (int y = ymin; y <= ymax; y++) {
        	float alpharow = alpha, gammarow = gamma, betarow = beta;
        	for (int x = xmin; x <= xmax; x++) {
@@ -466,13 +491,155 @@ void FR_DrawTriangle2DVC(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h,
                	uint32_t color = FR_BlendColor(c0, c1, c2, alpha, beta, gamma);
                	FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
            	}
-           	gamma += m01.x / gammaden;
-           	alpha += m12.x / alphaden;
-           	beta += m20.x / betaden;
+           	gamma += dxgamma;
+           	alpha += dxalpha;
+           	beta += dxbeta;
        	}
-       	gamma = gammarow + m01.y / gammaden;
-       	alpha =  alpharow + m12.y / alphaden;
-       	beta = betarow + m20.y / betaden;
+       	gamma = gammarow + dygamma;
+       	alpha =  alpharow + dyalpha;
+       	beta = betarow + dybeta;
    	}
 }
 
+void FR_DrawTriangle3DVC(uint32_t* pixels, float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h,
+                         float x0, float y0, float z0, float w0,
+                         float x1, float y1, float z1, float w1,
+                         float x2, float y2, float z2, float w2,
+                         uint32_t c0, uint32_t c1, uint32_t c2
+                         ) {
+    int xmin = floor(fmin(fmin(x0, x1), x2));
+    int ymin = floor(fmin(fmin(y0, y1), y2));
+    int xmax = ceil(fmax(fmax(x0, x1), x2));
+    int ymax = ceil(fmax(fmax(y0, y1), y2));
+
+	vec2 m01 = {
+    	y0 - y1,
+    	x1 - x0
+	};
+	vec2 m12 = {
+    	y1 - y2,
+    	x2 - x1
+	};
+	vec2 m20 = {
+    	y2 - y0,
+    	x0 - x2
+	};
+
+   	float alphaden = (m12.x * x0 + m12.y * y0 + x1 * y2 - x2 * y1);
+   	float betaden = (m20.x * x1 + m20.y * y1 + x2 * y0 - x0 * y2);
+   	float gammaden = (m01.x * x2 + m01.y * y2 + x0 * y1 - x1 * y0);
+
+   	if (alphaden == 0.0f) return;
+
+   	float alpha = (m12.x * xmin + m12.y * ymin + x1 * y2 - x2 * y1) / alphaden;
+   	float beta = (m20.x * xmin + m20.y * ymin + x2 * y0 - x0 * y2) / betaden;
+   	float gamma = (m01.x * xmin + m01.y * ymin + x0 * y1 - x1 * y0) / gammaden;
+
+   	float dxgamma = m01.x / gammaden;
+    float dxalpha = m12.x / alphaden;
+    float dxbeta = m20.x / betaden;
+
+   	float dygamma = m01.y / gammaden;
+    float dyalpha = m12.y / alphaden;
+    float dybeta = m20.y / betaden;
+
+   	for (int y = ymin; y <= ymax; y++) {
+       	float alpharow = alpha, gammarow = gamma, betarow = beta;
+       	for (int x = xmin; x <= xmax; x++) {
+           	float z = z0 * alpha + z1 * beta + z2 * gamma;
+           	float depth = FR_SampleDepth(depth_buffer, canvas_w, canvas_h, x, y);
+           	if (z > depth && alpha > 0 && beta > 0 && gamma > 0) {
+               	uint32_t color = FR_BlendColor(c0, c1, c2, alpha, beta, gamma);
+               	FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
+               	FR_SetDepth(depth_buffer, canvas_w, canvas_h, x, y, z);
+           	}
+           	gamma += dxgamma;
+           	alpha += dxalpha;
+           	beta += dxbeta;
+       	}
+       	gamma = gammarow + dygamma;
+       	alpha =  alpharow + dyalpha;
+       	beta = betarow + dybeta;
+   	}
+}
+
+uint32_t FR_SampleNearest(uint32_t* tex, uint16_t tex_width, uint16_t tex_height, float u, float v) {
+    if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) return 0;
+
+    uint16_t x = u * tex_width;
+    uint16_t y = v * tex_height;
+
+    return tex[y * tex_width + x];
+}
+
+void FR_DrawTriangle3DUV(uint32_t* pixels, float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h,
+                         float x0, float y0, float z0, float w0,
+                         float x1, float y1, float z1, float w1,
+                         float x2, float y2, float z2, float w2,
+                         float u0, float v0,
+                         float u1, float v1,
+                         float u2, float v2,
+                         uint32_t* tex, uint16_t tex_width, uint16_t tex_height,
+                         uint32_t (*sampler) (uint32_t*, uint16_t, uint16_t, float, float)
+                         ) {
+    int xmin = floor(fmin(fmin(x0, x1), x2));
+    int ymin = floor(fmin(fmin(y0, y1), y2));
+    int xmax = ceil(fmax(fmax(x0, x1), x2));
+    int ymax = ceil(fmax(fmax(y0, y1), y2));
+
+	vec2 m01 = {
+    	y0 - y1,
+    	x1 - x0
+	};
+	vec2 m12 = {
+    	y1 - y2,
+    	x2 - x1
+	};
+	vec2 m20 = {
+    	y2 - y0,
+    	x0 - x2
+	};
+
+   	float alphaden = (m12.x * x0 + m12.y * y0 + x1 * y2 - x2 * y1);
+   	float betaden = (m20.x * x1 + m20.y * y1 + x2 * y0 - x0 * y2);
+   	float gammaden = (m01.x * x2 + m01.y * y2 + x0 * y1 - x1 * y0);
+
+   	if (alphaden == 0.0f) return;
+
+   	float alpha = (m12.x * xmin + m12.y * ymin + x1 * y2 - x2 * y1) / alphaden;
+   	float beta = (m20.x * xmin + m20.y * ymin + x2 * y0 - x0 * y2) / betaden;
+   	float gamma = (m01.x * xmin + m01.y * ymin + x0 * y1 - x1 * y0) / gammaden;
+
+   	float dxgamma = m01.x / gammaden;
+    float dxalpha = m12.x / alphaden;
+    float dxbeta = m20.x / betaden;
+
+   	float dygamma = m01.y / gammaden;
+    float dyalpha = m12.y / alphaden;
+    float dybeta = m20.y / betaden;
+
+   	for (int y = ymin; y <= ymax; y++) {
+       	float alpharow = alpha, gammarow = gamma, betarow = beta;
+       	for (int x = xmin; x <= xmax; x++) {
+           	float z = z0 * alpha + z1 * beta + z2 * gamma;
+           	float depth = FR_SampleDepth(depth_buffer, canvas_w, canvas_h, x, y);
+           	if (z > depth && alpha > 0 && beta > 0 && gamma > 0) {
+               	// Interpolate over 1/w for perspective correct mapping
+               	float u = u0/w0 * alpha + u1/w1 * beta + u2/w2 * gamma;
+               	float v = v0/w0 * alpha + v1/w1 * beta + v2/w2 * gamma;
+               	u /= alpha/w0 + beta/w1 + gamma/w2;
+               	v /= alpha/w0 + beta/w1 + gamma/w2;
+
+               	uint32_t color = sampler(tex, tex_width, tex_height, u, v);
+               	FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
+               	FR_SetDepth(depth_buffer, canvas_w, canvas_h, x, y, z);
+           	}
+           	gamma += dxgamma;
+           	alpha += dxalpha;
+           	beta += dxbeta;
+       	}
+       	gamma = gammarow + dygamma;
+       	alpha =  alpharow + dyalpha;
+       	beta = betarow + dybeta;
+   	}
+}

@@ -9,5 +9,5 @@
 
 typedef enum { P4, P6 } NETPBM_FILE_TYPE;
 
-bool* readPBM(FILE* file, int* width, int* height);
-uint32_t* readPPM(FILE* file, int* width, int* height);
+bool* readPBM(FILE* file, uint16_t* width, uint16_t* height);
+uint32_t* readPPM(FILE* file, uint16_t* width, uint16_t* height);
