@@ -9,7 +9,9 @@
 #include <renderer/render.h>
 #include <renderer/colors.h>
 #include <math/fmath.h>
+#include <obj/obj.h>
 #include <utils/pbm_reader.h>
+#include <utils/array.h>
 
 // SDL state
 SDL_Window   *win;
@@ -26,6 +28,8 @@ bool running = true;
 uint32_t* cube_tex;
 uint16_t cube_tex_width;
 uint16_t cube_tex_height;
+
+Mesh teapot;
 
 // For rotating objects periodically
 float theta;
@@ -65,51 +69,112 @@ float f = -100.0f;
 float MyPreFrame(void* self) {
     memset(fb, 0xFFFBFBFB, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(uint32_t)); // Clear framebuffer
 
-	// Spinning cube in orthographic projection
+	float cospitch = cosf(pitch);
+	float sinpitch = sinf(pitch);
+	float cosyaw = cosf(yaw);
+	float sinyaw = sinf(yaw);
+	// Eye position
+	vec3 e = {
+    	target.x + distance * cospitch * sinyaw,
+    	target.y + distance * sinpitch,
+    	target.z + distance * cospitch * cosyaw
+	};
+
+	// Gaze direction
+	vec3 g = vec3dir(vec3sub(target, e));
+
+	// View-up vector
+	vec3 up = {
+    	0, 1, 0
+	};
+
+	// Construct orthonormal basis from g, up
+	vec3 w = vec3scale(g, -1.0); 
+	vec3 u = vec3cross(up, w);
+	vec3 v = vec3cross(w, u);
+
+	// camera transform matrix
+	mat4 m_cam = {
+		u.x, u.y, u.z, -vec3dot(u, e),
+		v.x, v.y, v.z, -vec3dot(v, e),
+		w.x, w.y, w.z, -vec3dot(w, e),
+		0,   0,   0,   1
+	};
+
+	// viewport matrix
+	// canonical view volume -> screen space
+	float nx = CANVAS_WIDTH; float ny = CANVAS_HEIGHT;
+	mat4 m_vp = {
+		nx / 2,    0, 0, (nx - 1) / 2,
+		     0, -ny/2, 0, (ny - 1) / 2,
+		     0,    0, 1, 			0,
+		     0,    0, 0, 			1
+	};
+
+    mat4 m_model = (mat4) {
+		0.05, 0, 0, 0,
+		0, 0.05, 0, 0,
+		0, 0, 0.05, 0,
+		0, 0, 0, 	1
+    };
+
+	mat4 m_orth = {
+    	2/(r - l),       0,       0, -(r+l)/(r-l),
+    	        0, 2/(t-b),       0, -(t+b)/(t-b),
+    	        0,       0, 2/(n-f), -(n+f)/(n-f),
+    	        0,       0,       0, 			1
+	};
+
+	mat4 m_perspective = {
+    	n, 0, 0, 0,
+    	0, n, 0, 0,
+    	0, 0, n + f, -f * n,
+    	0, 0, 1, 0
+	};
+
+	mat4 m;
+	// Perspective
+	if (perspective) {
+    	m = mat4mat4mul(m_perspective, m_cam);
+	} else {
+		m = m_cam;
+	}
+	m = mat4mat4mul(m_orth, m);
+	m = mat4mat4mul(m_vp, m);
+
+	// Clear depth buffer
+	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) db[i] = -f;
+
 	if (true) {
-    	float cospitch = cosf(pitch);
-    	float sinpitch = sinf(pitch);
-    	float cosyaw = cosf(yaw);
-    	float sinyaw = sinf(yaw);
-    	// Eye position
-    	vec3 e = {
-        	target.x + distance * cospitch * sinyaw,
-        	target.y + distance * sinpitch,
-        	target.z + distance * cospitch * cosyaw
-    	};
 
-		// Gaze direction
-		vec3 g = vec3dir(vec3sub(target, e));
+		for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
+    		vec4 p = (vec4) {vec3dc(teapot.vertices[teapot.tris[i]]), 1.0f };
+    		vec4 q = (vec4) {vec3dc(teapot.vertices[teapot.tris[i + 1]]), 1.0f };
+    		vec4 r = (vec4) {vec3dc(teapot.vertices[teapot.tris[i + 2]]), 1.0f };
 
-		// View-up vector
-    	vec3 up = {
-        	0, 1, 0
-    	};
+    		p = mat4vec4mul(m_model, p);
+    		q = mat4vec4mul(m_model, q);
+    		r = mat4vec4mul(m_model, r);
 
-    	// Construct orthonormal basis from g, up
-    	vec3 w = vec3scale(g, -1.0); 
-    	vec3 u = vec3cross(up, w);
-    	vec3 v = vec3cross(w, u);
+    		p = mat4vec4mul(m, p);
+    		q = mat4vec4mul(m, q);
+    		r = mat4vec4mul(m, r);
 
-		// camera transform matrix
-		mat4 m_cam = {
-    		u.x, u.y, u.z, -vec3dot(u, e),
-    		v.x, v.y, v.z, -vec3dot(v, e),
-    		w.x, w.y, w.z, -vec3dot(w, e),
-    		0,   0,   0,   1
-		};
+    		// Perspective - leave w alone for interpolation
+    		if (perspective) {
+        		p.x /= p.w; p.y /= p.w; p.z /= p.w;
+        		q.x /= q.w; q.y /= q.w; q.z /= q.w;
+        		r.x /= r.w; r.y /= r.w; r.z /= r.w;
+    		}
 
-    	// viewport matrix
-    	// canonical view volume -> screen space
-    	float nx = CANVAS_WIDTH; float ny = CANVAS_HEIGHT;
-    	mat4 m_vp = {
-    		nx / 2,    0, 0, (nx - 1) / 2,
-    		     0, -ny/2, 0, (ny - 1) / 2,
-    		     0,    0, 1, 			0,
-    		     0,    0, 0, 			1
-    	};
-
-        memset(db, -10000, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(float));
+    		// Draw this guy as wireframe
+    		FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(q), GREEN);
+    		FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(q), vec2dc(r), GREEN);
+    		FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(r), vec2dc(p), GREEN);
+		}
+	}
+	// Spinning cube in orthographic projection
+	else if (false) {
 
         vec3 cube_vertices[24] = {
             // front (+z)
@@ -154,36 +219,6 @@ float MyPreFrame(void* self) {
             BROWN, BROWN, BROWN, BROWN, GRAY, GRAY, GRAY, GRAY,
         };
 
-        mat4 m_model = (mat4) {
-			1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1
-        };
-
-    	mat4 m_orth = {
-        	2/(r - l),       0,       0, -(r+l)/(r-l),
-        	        0, 2/(t-b),       0, -(t+b)/(t-b),
-        	        0,       0, 2/(n-f), -(n+f)/(n-f),
-        	        0,       0,       0, 			1
-    	};
-
-    	mat4 m_perspective = {
-        	n, 0, 0, 0,
-        	0, n, 0, 0,
-        	0, 0, n + f, -f * n,
-        	0, 0, 1, 0
-    	};
-
-		mat4 m;
-		// Perspective
-		if (perspective) {
-        	m = mat4mat4mul(m_perspective, m_cam);
-		} else {
-    		m = m_cam;
-		}
-    	m = mat4mat4mul(m_orth, m);
-    	m = mat4mat4mul(m_vp, m);
 
     	for (size_t i = 0; i < (size_t) sizeof(cube_tris) / sizeof(int); i += 3) {
         	vec4 p = { vec3dc(cube_vertices[cube_tris[i]]), 1 };
@@ -236,35 +271,35 @@ float MyPreFrame(void* self) {
         FR_DrawTriangle2DVC(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(v1), vec2dc(v2), vec2dc(v3), RED, GREEN, BLUE);
 	}
     
-    SDL_Event e;
+    SDL_Event event;
     Engine* eng = (Engine*) self;
     // Clear input buffer
     eng->input.event_counter = 0;
 
-    while (SDL_PollEvent(&e)) {
-        switch (e.type) {
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
             case SDL_QUIT:
                 running = false;
                 break;
             case SDL_MOUSEMOTION:
-                eng->input.mouseX = (int) e.motion.x / WINDOW_SCALE_FACTOR;
-                eng->input.mouseY = (int) e.motion.y / WINDOW_SCALE_FACTOR;
+                eng->input.mouseX = (int) event.motion.x / WINDOW_SCALE_FACTOR;
+                eng->input.mouseY = (int) event.motion.y / WINDOW_SCALE_FACTOR;
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                eng->input.mouseButton[e.button.button - 1] = true;
+                eng->input.mouseButton[event.button.button - 1] = true;
                 break;
             case SDL_MOUSEBUTTONUP:
-                eng->input.mouseButton[e.button.button - 1] = false;
+                eng->input.mouseButton[event.button.button - 1] = false;
                 break;
             case SDL_KEYDOWN:
                 if (eng->input.event_counter < INPUT_BUFFER_SIZE) {
-                    InputEvent ev = { e.key.keysym.sym, true };
+                    InputEvent ev = { event.key.keysym.sym, true };
                     eng->input.events[eng->input.event_counter++] = ev;
                 }
                 break;
             case SDL_KEYUP:
                 if (eng->input.event_counter < INPUT_BUFFER_SIZE) {
-                    InputEvent ev = { e.key.keysym.sym, false };
+                    InputEvent ev = { event.key.keysym.sym, false };
                     eng->input.events[eng->input.event_counter++] = ev;
                 }
                 break;
@@ -367,6 +402,12 @@ int main(void) {
     if (cube_tex == NULL) {
         exit(1);
     }
+
+	FILE *file = fopen("res/teapot.obj", "r");
+	if (file == NULL) {
+    	exit(1);
+	}
+	teapot = FO_LoadObj(file);
 
     while (running) {
         FE_Loop(&engine, rctx, (AudioContext) {0});

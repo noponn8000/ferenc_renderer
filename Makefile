@@ -10,6 +10,7 @@ SRC     := $(wildcard src/utils/*.c) \
            $(wildcard src/audio/*.c) \
            $(wildcard src/engine/*.c) \
            $(wildcard src/math/*.c) \
+           $(wildcard src/obj/*.c) \
            $(wildcard src/application/*.c)
 
 OBJ     := $(patsubst src/%.c,build/%.o,$(SRC))
