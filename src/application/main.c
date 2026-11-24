@@ -37,6 +37,7 @@ float theta;
 // ---- Camera
 // Perspective vs. ortohgraphic
 bool perspective = true;
+bool wireframe = false;
 
 // Where the camera is looking at
 vec3 target = { 0 };
@@ -143,7 +144,7 @@ float MyPreFrame(void* self) {
 	m = mat4mat4mul(m_vp, m);
 
 	// Clear depth buffer
-	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) db[i] = -f;
+	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) db[i] = f;
 
 	if (true) {
 
@@ -167,10 +168,14 @@ float MyPreFrame(void* self) {
         		r.x /= r.w; r.y /= r.w; r.z /= r.w;
     		}
 
+            FR_DrawTriangle3DVC(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r), RED, GREEN, BLUE);
+
     		// Draw this guy as wireframe
-    		FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(q), GREEN);
-    		FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(q), vec2dc(r), GREEN);
-    		FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(r), vec2dc(p), GREEN);
+            if (wireframe) {
+                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(q), GREEN);
+                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(q), vec2dc(r), GREEN);
+                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(r), vec2dc(p), GREEN);
+            }
 		}
 	}
 	// Spinning cube in orthographic projection
@@ -335,6 +340,8 @@ void MyPostFrame(void* self, RenderContext rctx, AudioContext actx) {
                 distance += 0.5;
             } else if (engine->input.events[i].key == 'y') {
                 perspective = !perspective;
+            } else if (engine->input.events[i].key == 'w') {
+                wireframe = !wireframe;
             }
         }
     }
