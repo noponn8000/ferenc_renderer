@@ -69,6 +69,39 @@ float f = -100.0f;
 #define CANVAS_HEIGHT 800
 #define CANVAS_WIDTH 800
 
+typedef struct {
+	vec3 albedo;
+	vec3 highlight;
+	vec3 lightPosition;
+	vec3 eyePosition;
+	float shininess;
+	float ambient;
+} BlinnPhongUniforms;
+
+uint32_t blinnPhongShader(const void* uniforms, const float* in) {
+	BlinnPhongUniforms* bp_uniforms = (BlinnPhongUniforms*) uniforms;
+
+	vec3 worldPos = {
+    	in[0],
+    	in[1],
+    	in[2]
+	};
+
+	vec3 normal = {
+    	in[3],
+    	in[4],
+    	in[5]
+	};
+	normal = vec3dir(normal);
+
+	vec3 rgb = blinn_phong(
+    	worldPos, bp_uniforms->lightPosition, bp_uniforms->eyePosition,
+    	normal, bp_uniforms->shininess, bp_uniforms->ambient, bp_uniforms->albedo, bp_uniforms->highlight
+	);
+
+	return FR_RGBAToAGBR8888(rgb.x * 255, rgb.y * 255, rgb.z * 255, 255);
+}
+
 float MyPreFrame(void* self) {
     memset(fb, 0xFFFBFBFB, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(uint32_t)); // Clear framebuffer
 
@@ -149,10 +182,14 @@ float MyPreFrame(void* self) {
 	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) db[i] = f;
 
 	if (true) {
-		const float rBase = 0.81; const float gBase = 0.40; const float bBase = 0.47;
-		const float rSpec = 1.0; const float gSpec = 1.0; const float bSpec = 1.0;
-		const float shininess = 16.0;
-		vec3 lightDir = { 0.0, 1.0, 0.0 };
+		BlinnPhongUniforms uniforms = {
+    		.albedo = (vec3) { 0.81, 0.40, 0.47 },
+    		.highlight = (vec3) { 1.0, 1.0, 1.0 },
+    		.lightPosition = { 3.0, 5.0, 0.0 },
+    		.eyePosition = e,
+    		.shininess = 8,
+    		.ambient = 0.3
+		};
 
         for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
             uint32_t i0 = teapot.tris[i], i1 = teapot.tris[i + 1], i2 = teapot.tris[i + 2];
@@ -166,47 +203,21 @@ float MyPreFrame(void* self) {
             q = mat4vec4mul(m_model, q);
             r = mat4vec4mul(m_model, r);
 
-            vec4 n1 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i0]), 0.0f });
-            vec4 n2 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i1]), 0.0f });
-            vec4 n3 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i2]), 0.0f });
+            vec4 n0 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i0]), 0.0f });
+            vec4 n1 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i1]), 0.0f });
+            vec4 n2 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i2]), 0.0f });
 
             vec4 pp, qp, rp;
             if (drawNormals) {
-                pp = vec4add(p, vec4scale(n1, NORMAL_LENGTH));
-                qp = vec4add(q, vec4scale(n2, NORMAL_LENGTH));
-                rp = vec4add(r, vec4scale(n3, NORMAL_LENGTH));
+                pp = vec4add(p, vec4scale(n0, NORMAL_LENGTH));
+                qp = vec4add(q, vec4scale(n1, NORMAL_LENGTH));
+                rp = vec4add(r, vec4scale(n2, NORMAL_LENGTH));
             }
 
-			// Lambertian component
-            float l0 = vec3dot(lightDir, teapot.normals[i0]);
-            float l1 = vec3dot(lightDir, teapot.normals[i1]);
-            float l2 = vec3dot(lightDir, teapot.normals[i2]);
-            if (l0 < 0.0f) l0 = 0.0f;
-            if (l1 < 0.0f) l1 = 0.0f;
-            if (l2 < 0.0f) l2 = 0.0f;
+			float v0[6] = { p.x, p.y, p.z, n0.x, n0.y, n0.z };
+			float v1[6] = { q.x, q.y, q.z, n1.x, n1.y, n1.z };
+			float v2[6] = { r.x, r.y, r.z, n2.x, n2.y, n2.z };
 
-            // Specular component
-           	vec3 view0 = vec3dir(vec3sub(e, (vec3) {vec3dc(p)} ));
-           	vec3 halfway0 = vec3dir(vec3add(lightDir, view0));
-           	float s0 = vec3dot(halfway0, teapot.normals[i0]);
-			s0 = s0 > 0.0f ? powf(s0, shininess) : 0.0f;
-
-           	vec3 view1 = vec3dir(vec3sub(e, (vec3) {vec3dc(p)} ));
-           	vec3 halfway1 = vec3dir(vec3add(lightDir, view1));
-           	float s1 = vec3dot(halfway1, teapot.normals[i1]);
-			s1 = s1 > 0.0f ? powf(s1, shininess) : 0.0f;
-
-           	vec3 view2 = vec3dir(vec3sub(e, (vec3) {vec3dc(p)} ));
-           	vec3 halfway2 = vec3dir(vec3add(lightDir, view2));
-           	float s2 = vec3dot(halfway2, teapot.normals[i2]);
-			s2 = s2 > 0.0f ? powf(s2, shininess) : 0.0f;
-
-            vec3 cl0 = { clampf(l0 * rBase + s0 * rSpec, 0.0f, 1.0f), clampf(l0 * gBase + s0 * gSpec, 0.0f, 1.0f), clampf(l0 * bBase + s0 * bSpec, 0.0f, 1.0f)};
-            vec3 cl1 = { clampf(l1 * rBase + s1 * rSpec, 0.0f, 1.0f), clampf(l1 * gBase + s1 * gSpec, 0.0f, 1.0f), clampf(l1 * bBase + s1 * bSpec, 0.0f, 1.0f)};
-            vec3 cl2 = { clampf(l2 * rBase + s2 * rSpec, 0.0f, 1.0f), clampf(l2 * gBase + s2 * gSpec, 0.0f, 1.0f), clampf(l2 * bBase + s2 * bSpec, 0.0f, 1.0f)};
-            uint32_t c0 = FR_RGBAToAGBR8888(255 * cl0.x, 255 * cl0.y, 255 * cl0.z, 0xFF);
-            uint32_t c1 = FR_RGBAToAGBR8888(255 * cl1.x, 255 * cl1.y, 255 * cl1.z, 0xFF);
-            uint32_t c2 = FR_RGBAToAGBR8888(255 * cl2.x, 255 * cl2.y, 255 * cl2.z, 0xFF);
 
             p = mat4vec4mul(m, p);
             q = mat4vec4mul(m, q);
@@ -228,7 +239,11 @@ float MyPreFrame(void* self) {
                 }
             }
 
-            FR_DrawTriangle3DVC(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r), c0, c1, c2);
+            FR_DrawTriangle3DFS(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r),
+                                v0, v1, v2, 6,
+                                &uniforms, blinnPhongShader
+            );
+                                
 
             if (drawNormals) {
                 FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(pp), RED);

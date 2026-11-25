@@ -658,3 +658,75 @@ void FR_DrawTriangle3DUV(uint32_t* pixels, float* depth_buffer, uint16_t canvas_
        	beta = betarow + dybeta;
    	}
 }
+
+void FR_DrawTriangle3DFS(uint32_t* pixels, float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h,
+                         float x0, float y0, float z0, float w0,
+                         float x1, float y1, float z1, float w1,
+                         float x2, float y2, float z2, float w2,
+                         const float* var0, const float* var1, const float* var2,
+                         int num_interpolants,
+                         const void* uniforms,
+                         uint32_t (*fs)(const void* uniforms, const float* in)
+                         ) {
+    int xmin = floor(fmin(fmin(x0, x1), x2));
+    int ymin = floor(fmin(fmin(y0, y1), y2));
+    int xmax = ceil(fmax(fmax(x0, x1), x2));
+    int ymax = ceil(fmax(fmax(y0, y1), y2));
+
+    // Don't consider off-screen points to reduce computation
+    if (xmin < 0) xmin = 0;
+    if (ymin < 0) ymin = 0;
+    if (xmax > canvas_w - 1) xmax = canvas_w - 1;
+    if (ymax > canvas_h - 1) ymax = canvas_h - 1;
+
+    vec2 m01 = { y0 - y1, x1 - x0 };
+    vec2 m12 = { y1 - y2, x2 - x1 };
+    vec2 m20 = { y2 - y0, x0 - x2 };
+
+    float alphaden = (m12.x * x0 + m12.y * y0 + x1 * y2 - x2 * y1);
+    float betaden  = (m20.x * x1 + m20.y * y1 + x2 * y0 - x0 * y2);
+    float gammaden = (m01.x * x2 + m01.y * y2 + x0 * y1 - x1 * y0);
+
+    if (alphaden == 0.0f) return;
+
+    float alpha = (m12.x * xmin + m12.y * ymin + x1 * y2 - x2 * y1) / alphaden;
+    float beta  = (m20.x * xmin + m20.y * ymin + x2 * y0 - x0 * y2) / betaden;
+    float gamma = (m01.x * xmin + m01.y * ymin + x0 * y1 - x1 * y0) / gammaden;
+
+    float dxalpha = m12.x / alphaden, dyalpha = m12.y / alphaden;
+    float dxbeta  = m20.x / betaden,  dybeta  = m20.y / betaden;
+    float dxgamma = m01.x / gammaden, dygamma = m01.y / gammaden;
+
+    float iw0 = 1.0f / w0, iw1 = 1.0f / w1, iw2 = 1.0f / w2;
+
+    float in[FR_MAX_INTERPOLANTS];
+
+    for (int y = ymin; y <= ymax; y++) {
+        float alpharow = alpha, betarow = beta, gammarow = gamma;
+        for (int x = xmin; x <= xmax; x++) {
+            if (alpha >= 0 && beta >= 0 && gamma >= 0) {
+                float z = z0 * alpha + z1 * beta + z2 * gamma;
+                float depth = FR_SampleDepth(depth_buffer, canvas_w, canvas_h, x, y);
+                if (z > depth) {
+                    float pa = alpha * iw0, pb = beta * iw1, pc = gamma * iw2;
+                    float inv = 1.0f / (pa + pb + pc);
+                    pa *= inv; pb *= inv; pc *= inv;
+
+					// Interpolate all the vertex attributes
+                    for (int k = 0; k < num_interpolants; k++)
+                        in[k] = var0[k] * pa + var1[k] * pb + var2[k] * pc;
+
+                    uint32_t color = fs(uniforms, in);
+                    FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
+                    FR_SetDepth(depth_buffer, canvas_w, canvas_h, x, y, z);
+                }
+            }
+            alpha += dxalpha;
+            beta  += dxbeta;
+            gamma += dxgamma;
+        }
+        alpha = alpharow + dyalpha;
+        beta  = betarow  + dybeta;
+        gamma = gammarow + dygamma;
+    }
+}

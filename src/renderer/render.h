@@ -15,6 +15,9 @@ typedef struct {
     const uint32_t* codepoints;
 } Font;
 
+// Maximum number of interpolated floating-point vertex attributes in a shader
+#define FR_MAX_INTERPOLANTS 16
+
 // Color
 uint32_t FR_RGBAToAGBR8888(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
@@ -58,6 +61,19 @@ void FR_DrawTriangle3DUV(uint32_t* pixels, float* depth_buffer, uint16_t canvas_
                          float u2, float v2,
                          uint32_t* tex, uint16_t tex_width, uint16_t tex_height,
                          uint32_t (*sampler) (uint32_t*, uint16_t, uint16_t, float, float)
+                         );
+// Draw a triangle with a provided fragment shader
+// `uniforms` is a void pointer so that fragment shaders can define their own struct for holding uniforms and then cast
+// `in` is a float array with max size FR_MAX_INTERPOLANTS that holds vertex attributes
+// those are passed for each vertex
+void FR_DrawTriangle3DFS(uint32_t* pixels, float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h,
+                         float x0, float y0, float z0, float w0,
+                         float x1, float y1, float z1, float w1,
+                         float x2, float y2, float z2, float w2,
+                         const float* var0, const float* var1, const float* var2,
+                         int num_interpolants,
+                         const void* uniforms,
+                         uint32_t (*fs)(const void* uniforms, const float* in)
                          );
 
 // - - - - - - Font drawing
