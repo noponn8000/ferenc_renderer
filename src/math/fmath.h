@@ -84,6 +84,12 @@ mat2 mat2inv(mat2 a);
 mat3 mat3inv(mat3 a);
 mat4 mat4inv(mat4 a);
 
+float clampf(float x, float min, float max);
+
+float lambertian(vec3 lightDirection, vec3 normal);
+float specular(vec3 viewDirection, vec3 lightDirection, vec3 normal, float shininess);
+vec3 blinn_phong(vec3 fragmentPosition, vec3 lightPosition, vec3 eyePosition, vec3 normal, float shininess, vec3 albedo, vec3 highlight);
+
 #define vec2dc(v) (v).x, (v).y
 #define vec3dc(v) (v).x, (v).y, (v).z
 #define vec4dc(v) (v).x, (v).y, (v).z, (v).w

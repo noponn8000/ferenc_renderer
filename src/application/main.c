@@ -37,7 +37,8 @@ float theta;
 // ---- Camera
 // Perspective vs. ortohgraphic
 bool perspective = true;
-bool wireframe = false;
+bool drawWireframe = false;
+bool drawNormals = false;
 
 // Where the camera is looking at
 vec3 target = { 0 };
@@ -52,6 +53,7 @@ float mouseYPrev = -1.0f;
 
 const float MOUSE_SENSITIVITY = 3.5;
 const float MAX_PITCH = 1.2;
+const float NORMAL_LENGTH = 3.0;
 
 // Orthographic view volume
 // Assuming the view volume looks at the negative z-axis, with the up-direction being the positive y-axis
@@ -147,40 +149,101 @@ float MyPreFrame(void* self) {
 	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) db[i] = f;
 
 	if (true) {
+		const float rBase = 0.81; const float gBase = 0.40; const float bBase = 0.47;
+		const float rSpec = 1.0; const float gSpec = 1.0; const float bSpec = 1.0;
+		const float shininess = 16.0;
+		vec3 lightDir = { 0.0, 1.0, 0.0 };
 
-		for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
-    		vec4 p = (vec4) {vec3dc(teapot.vertices[teapot.tris[i]]), 1.0f };
-    		vec4 q = (vec4) {vec3dc(teapot.vertices[teapot.tris[i + 1]]), 1.0f };
-    		vec4 r = (vec4) {vec3dc(teapot.vertices[teapot.tris[i + 2]]), 1.0f };
+        for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
+            uint32_t i0 = teapot.tris[i], i1 = teapot.tris[i + 1], i2 = teapot.tris[i + 2];
 
-    		p = mat4vec4mul(m_model, p);
-    		q = mat4vec4mul(m_model, q);
-    		r = mat4vec4mul(m_model, r);
+            vec4 p = (vec4){ vec3dc(teapot.vertices[i0]), 1.0f };
+            vec4 q = (vec4){ vec3dc(teapot.vertices[i1]), 1.0f };
+            vec4 r = (vec4){ vec3dc(teapot.vertices[i2]), 1.0f };
 
-    		p = mat4vec4mul(m, p);
-    		q = mat4vec4mul(m, q);
-    		r = mat4vec4mul(m, r);
+            // To world space
+            p = mat4vec4mul(m_model, p);
+            q = mat4vec4mul(m_model, q);
+            r = mat4vec4mul(m_model, r);
 
-    		// Perspective - leave w alone for interpolation
-    		if (perspective) {
-        		p.x /= p.w; p.y /= p.w; p.z /= p.w;
-        		q.x /= q.w; q.y /= q.w; q.z /= q.w;
-        		r.x /= r.w; r.y /= r.w; r.z /= r.w;
-    		}
+            vec4 n1 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i0]), 0.0f });
+            vec4 n2 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i1]), 0.0f });
+            vec4 n3 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i2]), 0.0f });
 
-            FR_DrawTriangle3DVC(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r), RED, GREEN, BLUE);
+            vec4 pp, qp, rp;
+            if (drawNormals) {
+                pp = vec4add(p, vec4scale(n1, NORMAL_LENGTH));
+                qp = vec4add(q, vec4scale(n2, NORMAL_LENGTH));
+                rp = vec4add(r, vec4scale(n3, NORMAL_LENGTH));
+            }
 
-    		// Draw this guy as wireframe
-            if (wireframe) {
+			// Lambertian component
+            float l0 = vec3dot(lightDir, teapot.normals[i0]);
+            float l1 = vec3dot(lightDir, teapot.normals[i1]);
+            float l2 = vec3dot(lightDir, teapot.normals[i2]);
+            if (l0 < 0.0f) l0 = 0.0f;
+            if (l1 < 0.0f) l1 = 0.0f;
+            if (l2 < 0.0f) l2 = 0.0f;
+
+            // Specular component
+           	vec3 view0 = vec3dir(vec3sub(e, (vec3) {vec3dc(p)} ));
+           	vec3 halfway0 = vec3dir(vec3add(lightDir, view0));
+           	float s0 = vec3dot(halfway0, teapot.normals[i0]);
+			s0 = s0 > 0.0f ? powf(s0, shininess) : 0.0f;
+
+           	vec3 view1 = vec3dir(vec3sub(e, (vec3) {vec3dc(p)} ));
+           	vec3 halfway1 = vec3dir(vec3add(lightDir, view1));
+           	float s1 = vec3dot(halfway1, teapot.normals[i1]);
+			s1 = s1 > 0.0f ? powf(s1, shininess) : 0.0f;
+
+           	vec3 view2 = vec3dir(vec3sub(e, (vec3) {vec3dc(p)} ));
+           	vec3 halfway2 = vec3dir(vec3add(lightDir, view2));
+           	float s2 = vec3dot(halfway2, teapot.normals[i2]);
+			s2 = s2 > 0.0f ? powf(s2, shininess) : 0.0f;
+
+            vec3 cl0 = { clampf(l0 * rBase + s0 * rSpec, 0.0f, 1.0f), clampf(l0 * gBase + s0 * gSpec, 0.0f, 1.0f), clampf(l0 * bBase + s0 * bSpec, 0.0f, 1.0f)};
+            vec3 cl1 = { clampf(l1 * rBase + s1 * rSpec, 0.0f, 1.0f), clampf(l1 * gBase + s1 * gSpec, 0.0f, 1.0f), clampf(l1 * bBase + s1 * bSpec, 0.0f, 1.0f)};
+            vec3 cl2 = { clampf(l2 * rBase + s2 * rSpec, 0.0f, 1.0f), clampf(l2 * gBase + s2 * gSpec, 0.0f, 1.0f), clampf(l2 * bBase + s2 * bSpec, 0.0f, 1.0f)};
+            uint32_t c0 = FR_RGBAToAGBR8888(255 * cl0.x, 255 * cl0.y, 255 * cl0.z, 0xFF);
+            uint32_t c1 = FR_RGBAToAGBR8888(255 * cl1.x, 255 * cl1.y, 255 * cl1.z, 0xFF);
+            uint32_t c2 = FR_RGBAToAGBR8888(255 * cl2.x, 255 * cl2.y, 255 * cl2.z, 0xFF);
+
+            p = mat4vec4mul(m, p);
+            q = mat4vec4mul(m, q);
+            r = mat4vec4mul(m, r);
+            if (drawNormals) {
+                pp = mat4vec4mul(m, pp);
+                qp = mat4vec4mul(m, qp);
+                rp = mat4vec4mul(m, rp);
+            }
+
+            if (perspective) {
+                p.x /= p.w; p.y /= p.w; p.z /= p.w;
+                q.x /= q.w; q.y /= q.w; q.z /= q.w;
+                r.x /= r.w; r.y /= r.w; r.z /= r.w;
+                if (drawNormals) {
+                    pp.x /= pp.w; pp.y /= pp.w; pp.z /= pp.w;
+                    qp.x /= qp.w; qp.y /= qp.w; qp.z /= qp.w;
+                    rp.x /= rp.w; rp.y /= rp.w; rp.z /= rp.w;
+                }
+            }
+
+            FR_DrawTriangle3DVC(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r), c0, c1, c2);
+
+            if (drawNormals) {
+                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(pp), RED);
+                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(q), vec2dc(qp), RED);
+                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(r), vec2dc(rp), RED);
+            }
+
+            if (drawWireframe) {
                 FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(q), GREEN);
                 FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(q), vec2dc(r), GREEN);
                 FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(r), vec2dc(p), GREEN);
             }
-		}
-	}
-	// Spinning cube in orthographic projection
-	else if (false) {
-
+        }
+    } else if (false) {
+		// Spinning cube
         vec3 cube_vertices[24] = {
             // front (+z)
             {-1,-1, 1}, { 1,-1, 1}, { 1, 1, 1}, {-1, 1, 1},
@@ -334,14 +397,16 @@ void MyPostFrame(void* self, RenderContext rctx, AudioContext actx) {
 
     for (int i = 0; i < engine->input.event_counter; i++) {
         if (engine->input.events[i].down) {
-            if (engine->input.events[i].key == 'p') {
+            if (engine->input.events[i].key == '+') {
                 distance -= 0.5;
-            } else if (engine->input.events[i].key == '.') {
+            } else if (engine->input.events[i].key == '-') {
                 distance += 0.5;
-            } else if (engine->input.events[i].key == 'y') {
+            } else if (engine->input.events[i].key == 'p') {
                 perspective = !perspective;
             } else if (engine->input.events[i].key == 'w') {
-                wireframe = !wireframe;
+                drawWireframe = !drawWireframe;
+            } else if (engine->input.events[i].key == 'n') {
+                drawNormals = !drawNormals;
             }
         }
     }

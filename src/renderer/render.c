@@ -543,13 +543,28 @@ void FR_DrawTriangle3DVC(uint32_t* pixels, float* depth_buffer, uint16_t canvas_
     float dyalpha = m12.y / alphaden;
     float dybeta = m20.y / betaden;
 
+	uint8_t r0, g0, b0, a0;
+	uint8_t r1, g1, b1, a1;
+	uint8_t r2, g2, b2, a2;
+	FR_AGBR8888ToRGBA(c0, &r0, &g0, &b0, &a0);
+	FR_AGBR8888ToRGBA(c1, &r1, &g1, &b1, &a1);
+	FR_AGBR8888ToRGBA(c2, &r2, &g2, &b2, &a2);
+
    	for (int y = ymin; y <= ymax; y++) {
        	float alpharow = alpha, gammarow = gamma, betarow = beta;
        	for (int x = xmin; x <= xmax; x++) {
            	float z = z0 * alpha + z1 * beta + z2 * gamma;
            	float depth = FR_SampleDepth(depth_buffer, canvas_w, canvas_h, x, y);
+           	float r = r0/w0 * alpha + r1/w1 * beta + r2/w2 * gamma;
+           	float g = g0/w0 * alpha + g1/w1 * beta + g2/w2 * gamma;
+           	float b = b0/w0 * alpha + b1/w1 * beta + b2/w2 * gamma;
+           	float a = a0/w0 * alpha + a1/w1 * beta + a2/w2 * gamma;
+           	r /= alpha/w0 + beta/w1 + gamma/w2;
+           	g /= alpha/w0 + beta/w1 + gamma/w2;
+           	b /= alpha/w0 + beta/w1 + gamma/w2;
+           	a /= alpha/w0 + beta/w1 + gamma/w2;
            	if (z > depth && alpha > 0 && beta > 0 && gamma > 0) {
-               	uint32_t color = FR_BlendColor(c0, c1, c2, alpha, beta, gamma);
+               	uint32_t color = FR_RGBAToAGBR8888(r, g, b, a);
                	FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
                	FR_SetDepth(depth_buffer, canvas_w, canvas_h, x, y, z);
            	}

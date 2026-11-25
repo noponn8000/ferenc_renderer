@@ -127,6 +127,24 @@ vec4 vec4scale(vec4 v, float s) {
     };
 }
 
+vec4 vec4add(vec4 a, vec4 b) {
+    return (vec4) {
+        a.x + b.x,
+        a.y + b.y,
+        a.z + b.z,
+        a.w + b.w
+    };
+}
+
+vec4 vec4sub(vec4 a, vec4 b) {
+    return (vec4) {
+        b.x - a.x,
+        b.y - a.y,
+        b.z - a.z,
+        b.w - a.w
+    };
+}
+
 vec3 vec3cross(vec3 a, vec3 b) {
 	return (vec3) {
     	a.y * b.z - a.z * b.y,
@@ -213,4 +231,37 @@ mat4 mat4perspective(float n, float f) {
     };
 }
 
+float clampf(float x, float min, float max) {
+	if (x < min) return min;
+	if (x > max) return max;
+	return x;
+}
 
+float lambertian(vec3 lightDirection, vec3 normal) {
+    return clampf(vec3dot(lightDirection, normal), 0.0f, 1.0f);
+}
+
+float specular(vec3 viewDirection, vec3 lightDirection, vec3 normal, float shininess) {
+    vec3 halfway = vec3dir(vec3add(lightDirection, viewDirection));
+    float hdotl = clampf(vec3dot(normal, halfway), 0.0f, 1.0f);
+
+    return powf(hdotl, shininess);
+}
+
+vec3 blinn_phong(vec3 fragmentPosition, vec3 lightPosition, vec3 eyePosition, vec3 normal, float shininess, vec3 albedo, vec3 highlight) {
+    vec3 viewDirection = vec3dir(vec3sub(eyePosition, fragmentPosition));
+    vec3 lightDirection = vec3dir(vec3sub(lightPosition, fragmentPosition));
+
+    float l = lambertian(lightDirection, normal);
+    float s = specular(viewDirection, lightDirection, normal, shininess);
+
+	vec3 color = vec3add(
+    	vec3scale(albedo, l),
+    	vec3scale(highlight, s)
+    );
+	color.x = clampf(color.x, 0.0f, 1.0f);
+	color.y = clampf(color.y, 0.0f, 1.0f);
+	color.z = clampf(color.z, 0.0f, 1.0f);
+
+	return color;
+}

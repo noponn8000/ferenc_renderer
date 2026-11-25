@@ -4,11 +4,15 @@
 typedef struct {
 	vec3* vertices;
 
-	uint32_t* tris;
-
 	vec3* normals;
 
 	vec2* uvs;
+
+	uint32_t* tris;
+
+	uint32_t* tri_normals;
+
+	uint32_t* tri_uvs;
 
 	uint32_t* texture;
 } Mesh;
