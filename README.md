@@ -1,6 +1,7 @@
 # Ferenc Renderer
 
 ![cube](screenshot.png "Textured cube rendered in perspective projection")
+![cube](screenshot2.png "Utah Teapot in Blinn-Phong shading")
 
 Provides software rendering functions such as:
 
