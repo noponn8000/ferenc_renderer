@@ -42,6 +42,11 @@ void FR_DrawPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x,
         return;
     }
 
+	// Alpha == 255 means we can skip alpha blend
+    if ((color & 0xFF000000) == 0xFF000000) {
+        pixels[y * canvas_w + x] = color;
+    }
+
     // Alpha blend
     uint8_t ra, ga, ba, aa;
     uint8_t rb, gb, bb, ab;
@@ -72,7 +77,7 @@ uint32_t FR_LookPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, in
     return pixels[y * canvas_w + x];
 }
 
-float FR_SampleDepth(float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h, int x, int y) {
+float FR_SampleDepth(const float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h, int x, int y) {
     if (x >= canvas_w || x < 0 || y >= canvas_h || y < 0) {
         return NAN;
     }
@@ -132,7 +137,7 @@ void FR_DrawRectFill(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int
 {
 	for (int j = y_tl; j <= y_tl + height; j++) {
 		for (int i = x_tl; i <= x_tl + width; i++) {
-			pixels[j * canvas_w + i] = color;
+			FR_DrawPoint(pixels, canvas_w, canvas_h, i, j, color);
 		}
 	}	
 }
@@ -208,110 +213,6 @@ void FR_DrawCenteredRect(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h,
         FR_DrawPoint(pixels, canvas_w, canvas_h, xc - width/2, yc + yi, color);
         FR_DrawPoint(pixels, canvas_w, canvas_h, xc + width/2, yc + yi, color);
     }
-}
-
-void FR_DrawCenteredRectRotated(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int xc, int yc, int width, int height, float angle, uint32_t color) {
-    // Horizontal edges
-    int x, y;
-    for (int xi = -width/2; xi <= width/2; xi++) {
-        x = xc + xi;
-        y = yc - height / 2;
-        FR_RotatePointI(&x, &y, xc, yc, angle);
-        FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
-        x = xc + xi;
-        y = yc + height / 2;
-        FR_RotatePointI(&x, &y, xc, yc, angle);
-        FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
-    }
-
-    for (int yi = -height/2; yi <= height/2; yi++) {
-        x = xc + width / 2;
-        y = yc + yi;
-        FR_RotatePointI(&x, &y, xc, yc, angle);
-        FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
-        x = xc - width / 2;
-        y = yc + yi;
-        FR_RotatePointI(&x, &y, xc, yc, angle);
-        FR_DrawPoint(pixels, canvas_w, canvas_h, x, y, color);
-    }
-}
-
-void FR_RotatePointI(int *x, int *y, int xc, int yc, float angle) {
-    // Distances from center to point
-    int dx = *x - xc;
-    int dy = *y - yc;
-
-    float c = cos(angle); float s = sin(angle);
-    int xprime = dx * c - dy * s;
-    int yprime = dy * c + dx * s;
-
-    *x = xc + xprime;
-    *y = yc + yprime;
-}
-
-void FR_RotatePointF(float *x, float *y, float xc, float yc, float angle) {
-    float dx = *x - xc;
-    float dy = *y - yc;
-
-    float c = cos(angle); float s = sin(angle);
-    float xprime = dx * c - dy * s;
-    float yprime = dy * c + dx * s;
-
-    *x = xc + xprime;
-    *y = yc + yprime;
-}
-
-void FR_DrawTriangle(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color) {
-    FR_DrawLine(pixels, canvas_w, canvas_w, x0, y0, x1, y1, color);
-    FR_DrawLine(pixels, canvas_w, canvas_w, x1, y1, x2, y2, color);
-    FR_DrawLine(pixels, canvas_w, canvas_w, x2, y2, x0, y0, color);
-}
-
-void FR_DrawTriangleFill(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color) {
-    // Order the vertices by y-value
-    // thus P_0 = (x_0, y_0) is lowest y, P_2 = (x_2, y_2) is highest y.
-    if (y1 < y0) {
-        int xtemp = x0;
-        int ytemp = y0;
-        x0 = x1; y0 = y1;
-        x1 = xtemp; y1 = ytemp;
-    }
-    if (y2 < y0) {
-        int xtemp = x0;
-        int ytemp = y0;
-        x0 = x2; y0 = y2;
-        x2 = xtemp; y2 = ytemp;
-    }
-    if (y2 < y1) {
-        int xtemp = x1;
-        int ytemp = y1;
-        x1 = x2; y1 = y2;
-        x2 = xtemp; y2 = ytemp;
-    }
-
-    float m01 = (y1 != y0) ? ((float) x1 - x0)/((float) y1 - y0) : 0;
-    float m12 = (y2 != y1) ? ((float) x2 - x1)/((float) y2 - y1) : 0;
-    float m02 = (y2 != y0) ? ((float) x2 - x0)/((float) y2 - y0) : 0;
-    int xa;
-    int xb;
-    for (int yi = y0; yi <= y2; yi++) {
-        if (yi <= y1 && y0 != y1) {
-            xa = m01 * (yi - y0) + x0;
-        } else {
-            xa = m12 * (yi - y1) + x1;
-        }
-        xb = m02 * (yi - y0) + x0;
-
-        if (xa > xb) {
-            int xtemp = xa;
-            xa = xb;
-            xb = xtemp;
-        }
-
-        for (int xi = xa; xi <= xb; xi++) {
-            FR_DrawPoint(pixels, canvas_w, canvas_h, xi, yi, color);
-        }
-    } 
 }
 
 void FR_DrawRegularPolyRotated(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, int xc, int yc, int radius, uint8_t segments, float angle, uint32_t color) {
@@ -657,6 +558,60 @@ void FR_DrawTriangle3DUV(uint32_t* pixels, float* depth_buffer, uint16_t canvas_
        	alpha =  alpharow + dyalpha;
        	beta = betarow + dybeta;
    	}
+}
+
+void FR_DrawTriangleDepth(float * depth_buffer, uint16_t canvas_w, uint16_t canvas_h,
+                          float x0, float y0, float z0,
+                          float x1, float y1, float z1,
+                          float x2, float y2, float z2
+                         ) {
+    int xmin = floor(fmin(fmin(x0, x1), x2));
+    int ymin = floor(fmin(fmin(y0, y1), y2));
+    int xmax = ceil(fmax(fmax(x0, x1), x2));
+    int ymax = ceil(fmax(fmax(y0, y1), y2));
+
+    // Don't consider off-screen points to reduce computation
+    if (xmin < 0) xmin = 0;
+    if (ymin < 0) ymin = 0;
+    if (xmax > canvas_w - 1) xmax = canvas_w - 1;
+    if (ymax > canvas_h - 1) ymax = canvas_h - 1;
+
+    vec2 m01 = { y0 - y1, x1 - x0 };
+    vec2 m12 = { y1 - y2, x2 - x1 };
+    vec2 m20 = { y2 - y0, x0 - x2 };
+
+    float alphaden = (m12.x * x0 + m12.y * y0 + x1 * y2 - x2 * y1);
+    float betaden  = (m20.x * x1 + m20.y * y1 + x2 * y0 - x0 * y2);
+    float gammaden = (m01.x * x2 + m01.y * y2 + x0 * y1 - x1 * y0);
+
+    if (alphaden == 0.0f) return;
+
+    float alpha = (m12.x * xmin + m12.y * ymin + x1 * y2 - x2 * y1) / alphaden;
+    float beta  = (m20.x * xmin + m20.y * ymin + x2 * y0 - x0 * y2) / betaden;
+    float gamma = (m01.x * xmin + m01.y * ymin + x0 * y1 - x1 * y0) / gammaden;
+
+    float dxalpha = m12.x / alphaden, dyalpha = m12.y / alphaden;
+    float dxbeta  = m20.x / betaden,  dybeta  = m20.y / betaden;
+    float dxgamma = m01.x / gammaden, dygamma = m01.y / gammaden;
+
+    for (int y = ymin; y <= ymax; y++) {
+        float alpharow = alpha, betarow = beta, gammarow = gamma;
+        for (int x = xmin; x <= xmax; x++) {
+            if (alpha >= 0 && beta >= 0 && gamma >= 0) {
+                float z = z0 * alpha + z1 * beta + z2 * gamma;
+                float depth = FR_SampleDepth(depth_buffer, canvas_w, canvas_h, x, y);
+                if (z > depth) {
+                    FR_SetDepth(depth_buffer, canvas_w, canvas_h, x, y, z);
+                }
+            }
+            alpha += dxalpha;
+            beta  += dxbeta;
+            gamma += dxgamma;
+        }
+        alpha = alpharow + dyalpha;
+        beta  = betarow  + dybeta;
+        gamma = gammarow + dygamma;
+    }
 }
 
 void FR_DrawTriangle3DFS(uint32_t* pixels, float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h,

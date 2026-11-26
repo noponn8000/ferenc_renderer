@@ -1,3 +1,4 @@
+#include <stdint.h>
 #pragma once
 
 typedef struct {
@@ -85,6 +86,16 @@ mat3 mat3inv(mat3 a);
 mat4 mat4inv(mat4 a);
 
 float clampf(float x, float min, float max);
+
+
+mat4 mat4perspective(float n, float f);
+mat4 mat4camera(vec3 e, vec3 g, vec3 t);
+mat4 mat4orthographic(float l, float r, float b, float t, float n, float f);
+mat4 mat4viewport(uint16_t canvas_w, uint16_t canvas_h);
+mat4 mat4trans(vec3 trans);
+mat4 mat4homrotx(float theta);
+mat4 mat4homroty(float theta);
+mat4 mat4homrotz(float theta);
 
 float lambertian(vec3 lightDirection, vec3 normal);
 float specular(vec3 viewDirection, vec3 lightDirection, vec3 normal, float shininess);

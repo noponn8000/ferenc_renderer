@@ -1,5 +1,4 @@
 #include "fmath.h"
-#include <stdint.h>
 #include <math.h>
 
 vec2 mat2vec2mul(mat2 a, vec2 v) {
@@ -248,9 +247,9 @@ float specular(vec3 viewDirection, vec3 lightDirection, vec3 normal, float shini
     return powf(hdotl, shininess);
 }
 
-vec3 blinn_phong(vec3 fragmentPosition, vec3 lightPosition, vec3 eyePosition, vec3 normal, float shininess, float ambient, vec3 albedo, vec3 highlight) {
+vec3 blinn_phong(vec3 fragmentPosition, vec3 lightDirection, vec3 eyePosition, vec3 normal, float shininess, float ambient, vec3 albedo, vec3 highlight) {
     vec3 viewDirection = vec3dir(vec3sub(eyePosition, fragmentPosition));
-    vec3 lightDirection = vec3dir(vec3sub(lightPosition, fragmentPosition));
+    lightDirection = vec3dir(lightDirection);
 
     float l = ambient + (1.0f - ambient) * lambertian(lightDirection, normal);
     float s = specular(viewDirection, lightDirection, normal, shininess);

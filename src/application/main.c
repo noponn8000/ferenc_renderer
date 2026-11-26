@@ -21,6 +21,8 @@ SDL_Texture  *scrtex;
 uint32_t     *fb;
 // Depth buffer
 float		 *db;
+// Shadow map
+float 		 *sb;
 SDL_AudioDeviceID dev;
 bool running = true;
 
@@ -39,11 +41,12 @@ float theta;
 bool perspective = true;
 bool drawWireframe = false;
 bool drawNormals = false;
+bool drawShadows = false;
 
 // Where the camera is looking at
 vec3 target = { 0 };
 // Distance from target
-float distance = 5.0f;
+float distance = 7.0f;
 // Rotation
 float pitch = 0.0f;
 float yaw = 0.0f;
@@ -66,40 +69,49 @@ float f = -100.0f;
 
 // Scale factor canvas size -> window size
 #define WINDOW_SCALE_FACTOR 1
-#define CANVAS_HEIGHT 800
-#define CANVAS_WIDTH 800
+#define CANVAS_HEIGHT 1024
+#define CANVAS_WIDTH 1024
+
+#define SHADOW_WIDTH 1024
+#define SHADOW_HEIGHT 1024
 
 typedef struct {
+    mat4 lightProjection;
+    const float* shadowMap;
+    float shadowBias;
 	vec3 albedo;
 	vec3 highlight;
-	vec3 lightPosition;
+	vec3 lightDirection;
 	vec3 eyePosition;
 	float shininess;
 	float ambient;
 } BlinnPhongUniforms;
 
 uint32_t blinnPhongShader(const void* uniforms, const float* in) {
-	BlinnPhongUniforms* bp_uniforms = (BlinnPhongUniforms*) uniforms;
+    const BlinnPhongUniforms* u = (const BlinnPhongUniforms*) uniforms;
 
-	vec3 worldPos = {
-    	in[0],
-    	in[1],
-    	in[2]
-	};
+    vec3 worldPos = { in[0], in[1], in[2] };
+    vec3 normal   = vec3dir((vec3){ in[3], in[4], in[5] });
 
-	vec3 normal = {
-    	in[3],
-    	in[4],
-    	in[5]
-	};
-	normal = vec3dir(normal);
+    float ndotl = vec3dot(normal, u->lightDirection);
 
-	vec3 rgb = blinn_phong(
-    	worldPos, bp_uniforms->lightPosition, bp_uniforms->eyePosition,
-    	normal, bp_uniforms->shininess, bp_uniforms->ambient, bp_uniforms->albedo, bp_uniforms->highlight
-	);
+    float lit = drawShadows ? 0.0f : 1.0f;
 
-	return FR_RGBAToAGBR8888(rgb.x * 255, rgb.y * 255, rgb.z * 255, 255);
+    if (drawShadows && ndotl > 0.0f) {
+        vec4 lp = mat4vec4mul(u->lightProjection, (vec4){ worldPos.x, worldPos.y, worldPos.z, 1.0f });
+
+        float bias = fmaxf(u->shadowBias * (1.0f - ndotl), u->shadowBias * 0.1f);
+        float fragDepth = lp.z + bias;
+                float occlusionDepth = FR_SampleDepth(u->shadowMap, SHADOW_WIDTH, SHADOW_HEIGHT, floorf(lp.x), floorf(lp.y));
+                lit = (fragDepth < occlusionDepth) ? 0.0f : 1.0f;
+    }
+
+    vec3 full = blinn_phong(worldPos, u->lightDirection, u->eyePosition,
+                               normal, u->shininess, u->ambient, u->albedo, u->highlight);
+    vec3 ambient = vec3scale(u->albedo, u->ambient);
+    vec3 rgb = vec3add(ambient, vec3scale(vec3sub(full, ambient), lit));
+
+    return FR_RGBAToAGBR8888(rgb.x * 255, rgb.y * 255, rgb.z * 255, 255);
 }
 
 float MyPreFrame(void* self) {
@@ -178,18 +190,57 @@ float MyPreFrame(void* self) {
 	m = mat4mat4mul(m_orth, m);
 	m = mat4mat4mul(m_vp, m);
 
+	const float lightRadius = 3.0f;
+	const vec3 lightDirection = vec3dir((vec3) { 0.0f, 1.0f, 1.0f });
+	const vec3 lightPosition = vec3scale(lightDirection, lightRadius);
+
 	// Clear depth buffer
-	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) db[i] = f;
+	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) {
+    	db[i] = f;
+    	sb[i] = f;
+	}
 
 	if (true) {
+    	mat4 lightProjection = mat4camera(lightPosition, vec3scale(lightDirection, -1.0f), (vec3) {0, 0, 1});
+    	lightProjection = mat4mat4mul(
+        	mat4orthographic(-lightRadius, lightRadius, -lightRadius, lightRadius, 2.0f * lightRadius, 0.0f),
+        	lightProjection);
+    	lightProjection = mat4mat4mul(mat4viewport(SHADOW_WIDTH, SHADOW_HEIGHT), lightProjection);
+
 		BlinnPhongUniforms uniforms = {
+    		.lightProjection = lightProjection,
+    		.shadowBias = 0.1,
+    		.shadowMap = sb,
     		.albedo = (vec3) { 0.81, 0.40, 0.47 },
     		.highlight = (vec3) { 1.0, 1.0, 1.0 },
-    		.lightPosition = { 3.0, 5.0, 0.0 },
+    		.lightDirection = lightDirection,
     		.eyePosition = e,
     		.shininess = 8,
-    		.ambient = 0.3
+    		.ambient = 0.1
 		};
+
+		// Shadow map loop
+		if (drawShadows) {
+            for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
+                uint32_t i0 = teapot.tris[i], i1 = teapot.tris[i + 1], i2 = teapot.tris[i + 2];
+
+                vec4 p = (vec4){ vec3dc(teapot.vertices[i0]), 1.0f };
+                vec4 q = (vec4){ vec3dc(teapot.vertices[i1]), 1.0f };
+                vec4 r = (vec4){ vec3dc(teapot.vertices[i2]), 1.0f };
+
+                // To world space
+                p = mat4vec4mul(m_model, p);
+                q = mat4vec4mul(m_model, q);
+                r = mat4vec4mul(m_model, r);
+
+                // To light space
+                p = mat4vec4mul(lightProjection, p);
+                q = mat4vec4mul(lightProjection, q);
+                r = mat4vec4mul(lightProjection, r);
+
+                FR_DrawTriangleDepth(sb, SHADOW_WIDTH, SHADOW_HEIGHT, vec3dc(p), vec3dc(q), vec3dc(r));
+            }
+		}
 
         for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
             uint32_t i0 = teapot.tris[i], i1 = teapot.tris[i + 1], i2 = teapot.tris[i + 2];
@@ -422,6 +473,8 @@ void MyPostFrame(void* self, RenderContext rctx, AudioContext actx) {
                 drawWireframe = !drawWireframe;
             } else if (engine->input.events[i].key == 'n') {
                 drawNormals = !drawNormals;
+            } else if (engine->input.events[i].key == 's') {
+                drawShadows = !drawShadows;
             }
         }
     }
@@ -476,6 +529,7 @@ int main(void) {
     scrtex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
     fb = calloc(CANVAS_WIDTH * CANVAS_HEIGHT, sizeof(uint32_t));
     db = calloc(CANVAS_WIDTH * CANVAS_HEIGHT, sizeof(float));
+    sb = calloc(SHADOW_WIDTH * SHADOW_HEIGHT, sizeof(float));
 
     Engine engine = FE_InitEngine(MyPreFrame, MyPostFrame);
     RenderContext rctx = { fb, CANVAS_WIDTH, CANVAS_HEIGHT };
@@ -505,6 +559,7 @@ int main(void) {
 
     free(fb);
     free(db);
+    free(sb);
     free(cube_tex);
     return 0;
 }
