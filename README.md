@@ -12,13 +12,27 @@
 
 Provides software rendering functions such as:
 
-- Rendering various shapes (squares, circles, polygons)
+- Rendering various primitive shapes (squares, circles, polygons)
 - Rendering triangles
 	- 2D barycentric
 	- 3D with vertex colors
 	- 3D with UVs and texture
+	- 3D with fragment shaders
+- Near-plane clipping
+- Shading with Blinn-Phong model
+- Camera
+- Shadow mapping
 - Rendering .pbm textures
-- Basic postprocessing 
+- Basic postprocessing
+
+The 3D triangle rasterizer also interpolates vertex data in perspective-correct way.
+
+The demo `application/main.c` provides a basic rendering pipeline and a few objects loaded from .obj files
+These are rendered with blinn-phong shader and shadow map.
+
+## Ferenc Math
+
+Provides mostly linear algebra functions but also some ready-made functions for transformations
 
 ## Ferenc Audio
 
