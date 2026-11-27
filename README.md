@@ -1,7 +1,14 @@
 # Ferenc Renderer
-
-![cube](screenshot.png "Textured cube rendered in perspective projection")
-![cube](screenshot2.png "Utah Teapot in Blinn-Phong shading")
+<table>
+  <tr>
+    <td><img src="screenshots/screenshot1.png" width="400"></td>
+    <td><img src="screenshots/screenshot2.png" width="400"></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/screenshot3.png" width="400"></td>
+    <td><img src="screenshots/screenshot4.png" width="400"></td>
+  </tr>
+</table>
 
 Provides software rendering functions such as:
 

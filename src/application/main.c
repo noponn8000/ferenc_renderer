@@ -165,7 +165,7 @@ uint32_t blinnPhongShader(const void* uniforms, const float* in) {
 }
 
 float MyPreFrame(void* self) {
-    memset(fb, 0xFFFBFBFB, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(uint32_t)); // Clear framebuffer
+    memset(fb, 0xFF282828, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(uint32_t)); // Clear framebuffer
 
 	const float cospitch = cosf(pitch);
 	const float sinpitch = sinf(pitch);
