@@ -67,8 +67,10 @@ vec3 vec3sub(vec3 a, vec3 b);
 vec4 vec4sub(vec4 a, vec4 b);
 
 float vec3norm(vec3 v);
+float vec4norm(vec4 v);
 
 vec3 vec3dir(vec3 v);
+vec4 vec4dir(vec4 v);
 
 float vec2dot(vec2 a, vec2 b);
 float vec3dot(vec3 a, vec3 b);

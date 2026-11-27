@@ -16,3 +16,10 @@ typedef struct {
 
 	uint32_t* texture;
 } Mesh;
+
+typedef struct {
+    vec3 albedo;
+    vec3 specular;
+    float shininess;
+    float ambient;
+} BlinnPhongMaterial;

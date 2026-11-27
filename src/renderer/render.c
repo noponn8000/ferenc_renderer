@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include <math/fmath.h>
+#include <string.h>
 
 #define PI 3.14159265
 
@@ -79,7 +80,7 @@ uint32_t FR_LookPoint(uint32_t* pixels, uint16_t canvas_w, uint16_t canvas_h, in
 
 float FR_SampleDepth(const float* depth_buffer, uint16_t canvas_w, uint16_t canvas_h, int x, int y) {
     if (x >= canvas_w || x < 0 || y >= canvas_h || y < 0) {
-        return NAN;
+        return 0.0;
     }
 
     return depth_buffer[y * canvas_w + x];
@@ -684,4 +685,43 @@ void FR_DrawTriangle3DFS(uint32_t* pixels, float* depth_buffer, uint16_t canvas_
         beta  = betarow  + dybeta;
         gamma = gammarow + dygamma;
     }
+}
+
+int FR_ClipPolygon(const float *in, int nInput, float *out, int valuesPerVertex, float nx, float ny, float nz, float px, float py, float pz) {
+    vec3 normal = { nx, ny, nz };
+    vec3 planePoint = { px, py, pz };
+	float d = -vec3dot(normal, planePoint);
+
+	int nOutput = 0;
+	for (int i = 0; i < nInput; i++) {
+    	// Vertices are packed as floats like x1 y1 z1 x2 y2 z2 contiguously
+    	const float *a = in + (i * valuesPerVertex);
+    	// Modulo so that the edge can wrap around the input array
+    	const float *b = in + ((i + 1) % nInput) * valuesPerVertex;
+
+    	float distA = normal.x * a[0] + normal.y * a[1] + normal.z * a[2] + d;
+    	float distB = normal.x * b[0] + normal.y * b[1] + normal.z * b[2] + d;
+
+    	if (distA >= 0.0f) {
+        	// Vertex a is on the "in" side of the plane so it's copied to output
+			memcpy(out + nOutput * valuesPerVertex, a, valuesPerVertex * sizeof(float));
+			nOutput++;
+       	}
+
+       	if ((distA >= 0.0f) != (distB >= 0.0f)) {
+           	// The two vertices are on opposite sides of the plane, so we need to make new vertex
+           	// (distA - distB) is not zero for the same reason so the division below is ok
+           	// t is the fraction of the distance along the line between a and b where the line intersects the plane
+           	float t = distA / (distA - distB);
+			float *o = out + nOutput * valuesPerVertex;
+			for (int k = 0; k < valuesPerVertex; k++) {
+    			// Interpolate the points to find their value at point of intersection
+    			o[k] = a[k] + t * (b[k] - a[k]);
+			}
+
+			nOutput++;
+       	}
+	}
+
+	return nOutput;
 }

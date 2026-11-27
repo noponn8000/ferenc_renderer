@@ -126,6 +126,14 @@ vec4 vec4scale(vec4 v, float s) {
     };
 }
 
+float vec4norm(vec4 v) {
+    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w);
+}
+
+vec4 vec4dir(vec4 v) {
+    return vec4scale(v, 1.0f/vec4norm(v));
+}
+
 vec4 vec4add(vec4 a, vec4 b) {
     return (vec4) {
         a.x + b.x,

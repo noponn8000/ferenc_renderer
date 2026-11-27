@@ -31,7 +31,55 @@ uint32_t* cube_tex;
 uint16_t cube_tex_width;
 uint16_t cube_tex_height;
 
-Mesh teapot;
+#define N_MESHES 3
+#define NVERTEXDATA 6
+Mesh meshes[N_MESHES];
+BlinnPhongMaterial materials[N_MESHES] = {
+	{
+    	// Albedo
+    	{ 0.38, 0.57, 0.92 },
+    	// Specular color
+    	{ 0.9, 0.9, 0.9 },
+    	// Shininess (phong exponent)
+    	8.0,
+    	// Ambient
+    	0.1
+    	
+	},
+	{
+    	{ 0.32, 0.19, 0.72 },
+    	{ 0.9, 0.9, 0.9 },
+    	2.0,
+    	0.2
+	},
+	{
+    	{ 0.71, 0.18, 0.18 },
+    	{ 0.9, 0.9, 0.9 },
+    	16.0,
+    	0.1
+	}
+};
+
+mat4 meshTransforms[N_MESHES] = {
+    {
+		0.5, 0, 0, 2,
+		0, 0.5, 0, 0,
+		0, 0, 0.5, 2,
+		0, 0, 0,   1
+    },
+    {
+		8.0, 0, 0,  0.0,
+		0, 2.0, 0, -3.0,
+		0, 0, 8.0,  0.0,
+		0, 0, 0,    1.0
+    },
+    {
+		2.0, 0, 0, -2,
+		0, 2.0, 0, 0,
+		0, 0, 2.0, -2,
+		0, 0, 0,   1
+    },
+};
 
 // For rotating objects periodically
 float theta;
@@ -43,10 +91,12 @@ bool drawWireframe = false;
 bool drawNormals = false;
 bool drawShadows = false;
 
+float lightRadius;
+
 // Where the camera is looking at
 vec3 target = { 0 };
 // Distance from target
-float distance = 7.0f;
+float distance = 12.0f;
 // Rotation
 float pitch = 0.0f;
 float yaw = 0.0f;
@@ -56,7 +106,7 @@ float mouseYPrev = -1.0f;
 
 const float MOUSE_SENSITIVITY = 3.5;
 const float MAX_PITCH = 1.2;
-const float NORMAL_LENGTH = 3.0;
+const float NORMAL_LENGTH = 0.5;
 
 // Orthographic view volume
 // Assuming the view volume looks at the negative z-axis, with the up-direction being the positive y-axis
@@ -117,72 +167,37 @@ uint32_t blinnPhongShader(const void* uniforms, const float* in) {
 float MyPreFrame(void* self) {
     memset(fb, 0xFFFBFBFB, CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(uint32_t)); // Clear framebuffer
 
-	float cospitch = cosf(pitch);
-	float sinpitch = sinf(pitch);
-	float cosyaw = cosf(yaw);
-	float sinyaw = sinf(yaw);
+	const float cospitch = cosf(pitch);
+	const float sinpitch = sinf(pitch);
+	const float cosyaw = cosf(yaw);
+	const float sinyaw = sinf(yaw);
 	// Eye position
-	vec3 e = {
+	const vec3 e = {
     	target.x + distance * cospitch * sinyaw,
     	target.y + distance * sinpitch,
     	target.z + distance * cospitch * cosyaw
 	};
 
 	// Gaze direction
-	vec3 g = vec3dir(vec3sub(target, e));
+	const vec3 g = vec3dir(vec3sub(target, e));
 
 	// View-up vector
-	vec3 up = {
+	const vec3 up = {
     	0, 1, 0
 	};
 
-	// Construct orthonormal basis from g, up
-	vec3 w = vec3scale(g, -1.0); 
-	vec3 u = vec3cross(up, w);
-	vec3 v = vec3cross(w, u);
-
-	// camera transform matrix
-	mat4 m_cam = {
-		u.x, u.y, u.z, -vec3dot(u, e),
-		v.x, v.y, v.z, -vec3dot(v, e),
-		w.x, w.y, w.z, -vec3dot(w, e),
-		0,   0,   0,   1
-	};
-
-	// viewport matrix
-	// canonical view volume -> screen space
-	float nx = CANVAS_WIDTH; float ny = CANVAS_HEIGHT;
-	mat4 m_vp = {
-		nx / 2,    0, 0, (nx - 1) / 2,
-		     0, -ny/2, 0, (ny - 1) / 2,
-		     0,    0, 1, 			0,
-		     0,    0, 0, 			1
-	};
-
-    mat4 m_model = (mat4) {
-		0.05, 0, 0, 0,
-		0, 0.05, 0, 0,
-		0, 0, 0.05, 0,
-		0, 0, 0, 	1
-    };
-
-	mat4 m_orth = {
-    	2/(r - l),       0,       0, -(r+l)/(r-l),
-    	        0, 2/(t-b),       0, -(t+b)/(t-b),
-    	        0,       0, 2/(n-f), -(n+f)/(n-f),
-    	        0,       0,       0, 			1
-	};
-
-	mat4 m_perspective = {
-    	n, 0, 0, 0,
-    	0, n, 0, 0,
-    	0, 0, n + f, -f * n,
-    	0, 0, 1, 0
-	};
+	// Camera matrix
+	const mat4 m_cam = mat4camera(e, g, up);
+	// Viewport matrix
+	const mat4 m_vp = mat4viewport(CANVAS_WIDTH, CANVAS_HEIGHT);
+	// Orthographic projection matrix
+	const mat4 m_orth = mat4orthographic(l, r, b, t, n, f);
+	// Perspective matrix
+	const mat4 m_perspective = mat4perspective(n, f);
 
 	mat4 m;
-	// Perspective
 	if (perspective) {
+    	// If perspective is enabled, add that to the matrix pipeline before the orthographic matrix
     	m = mat4mat4mul(m_perspective, m_cam);
 	} else {
 		m = m_cam;
@@ -190,9 +205,10 @@ float MyPreFrame(void* self) {
 	m = mat4mat4mul(m_orth, m);
 	m = mat4mat4mul(m_vp, m);
 
-	const float lightRadius = 3.0f;
-	const vec3 lightDirection = vec3dir((vec3) { 0.0f, 1.0f, 1.0f });
+	const vec3 lightDirection = vec3dir((vec3) { 0.0f, 1.0f, 0.0f });
 	const vec3 lightPosition = vec3scale(lightDirection, lightRadius);
+	// Find a point on the near plane by going -n units away from the camera position in the direction of gaze
+	const vec3 nearPlanePoint = vec3add(e, vec3scale(g, -n));
 
 	// Clear depth buffer
 	for (int i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT; i++) {
@@ -200,33 +216,33 @@ float MyPreFrame(void* self) {
     	sb[i] = f;
 	}
 
-	if (true) {
-    	mat4 lightProjection = mat4camera(lightPosition, vec3scale(lightDirection, -1.0f), (vec3) {0, 0, 1});
-    	lightProjection = mat4mat4mul(
-        	mat4orthographic(-lightRadius, lightRadius, -lightRadius, lightRadius, 2.0f * lightRadius, 0.0f),
-        	lightProjection);
-    	lightProjection = mat4mat4mul(mat4viewport(SHADOW_WIDTH, SHADOW_HEIGHT), lightProjection);
+	// Construct the projection matrix that renders depth from the light's POV
+	mat4 lightProjection = mat4camera(lightPosition, vec3scale(lightDirection, -1.0f), (vec3) {0, 0, 1});
+	lightProjection = mat4mat4mul(
+    	mat4orthographic(-lightRadius, lightRadius, -lightRadius, lightRadius, 2.0f * lightRadius, 0.0f),
+    	lightProjection);
+	lightProjection = mat4mat4mul(mat4viewport(SHADOW_WIDTH, SHADOW_HEIGHT), lightProjection);
 
-		BlinnPhongUniforms uniforms = {
-    		.lightProjection = lightProjection,
-    		.shadowBias = 0.1,
-    		.shadowMap = sb,
-    		.albedo = (vec3) { 0.81, 0.40, 0.47 },
-    		.highlight = (vec3) { 1.0, 1.0, 1.0 },
-    		.lightDirection = lightDirection,
-    		.eyePosition = e,
-    		.shininess = 8,
-    		.ambient = 0.1
-		};
+	// Struct that holds uniforms to pass into fragment shader
+	BlinnPhongUniforms uniforms = {
+		.lightProjection = lightProjection,
+		.shadowBias = 0.1,
+		.shadowMap = sb,
+		.lightDirection = lightDirection,
+		.eyePosition = e,
+	};
 
-		// Shadow map loop
-		if (drawShadows) {
-            for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
-                uint32_t i0 = teapot.tris[i], i1 = teapot.tris[i + 1], i2 = teapot.tris[i + 2];
+	// Shadow map loop
+	if (drawShadows) {
+    	for (int mi = 0; mi < N_MESHES; mi++) {
+        	Mesh mesh = meshes[mi];
+        	mat4 m_model = meshTransforms[mi];
+            for (size_t i = 0; i + 2 < arr_len(mesh.tris); i += 3) {
+                uint32_t i0 = mesh.tris[i], i1 = mesh.tris[i + 1], i2 = mesh.tris[i + 2];
 
-                vec4 p = (vec4){ vec3dc(teapot.vertices[i0]), 1.0f };
-                vec4 q = (vec4){ vec3dc(teapot.vertices[i1]), 1.0f };
-                vec4 r = (vec4){ vec3dc(teapot.vertices[i2]), 1.0f };
+                vec4 p = (vec4){ vec3dc(mesh.vertices[i0]), 1.0f };
+                vec4 q = (vec4){ vec3dc(mesh.vertices[i1]), 1.0f };
+                vec4 r = (vec4){ vec3dc(mesh.vertices[i2]), 1.0f };
 
                 // To world space
                 p = mat4vec4mul(m_model, p);
@@ -238,172 +254,102 @@ float MyPreFrame(void* self) {
                 q = mat4vec4mul(lightProjection, q);
                 r = mat4vec4mul(lightProjection, r);
 
+				// Draw the triangle's depth in the depth buffer
                 FR_DrawTriangleDepth(sb, SHADOW_WIDTH, SHADOW_HEIGHT, vec3dc(p), vec3dc(q), vec3dc(r));
             }
-		}
+    	}
+	}
 
-        for (size_t i = 0; i + 2 < arr_len(teapot.tris); i += 3) {
-            uint32_t i0 = teapot.tris[i], i1 = teapot.tris[i + 1], i2 = teapot.tris[i + 2];
+	for (int mi = 0; mi < N_MESHES; mi++) {
+    	Mesh mesh = meshes[mi];
+    	mat4 m_model = meshTransforms[mi];
+		BlinnPhongMaterial material = materials[mi];
 
-            vec4 p = (vec4){ vec3dc(teapot.vertices[i0]), 1.0f };
-            vec4 q = (vec4){ vec3dc(teapot.vertices[i1]), 1.0f };
-            vec4 r = (vec4){ vec3dc(teapot.vertices[i2]), 1.0f };
+		uniforms.albedo = material.albedo;
+		uniforms.highlight = material.specular;
+		uniforms.shininess = material.shininess;
+		uniforms.ambient = material.ambient;
+
+        for (size_t i = 0; i + 2 < arr_len(mesh.tris); i += 3) {
+            uint32_t i0 = mesh.tris[i], i1 = mesh.tris[i + 1], i2 = mesh.tris[i + 2];
+
+            vec4 p = (vec4){ vec3dc(mesh.vertices[i0]), 1.0f };
+            vec4 q = (vec4){ vec3dc(mesh.vertices[i1]), 1.0f };
+            vec4 r = (vec4){ vec3dc(mesh.vertices[i2]), 1.0f };
 
             // To world space
             p = mat4vec4mul(m_model, p);
             q = mat4vec4mul(m_model, q);
             r = mat4vec4mul(m_model, r);
 
-            vec4 n0 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i0]), 0.0f });
-            vec4 n1 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i1]), 0.0f });
-            vec4 n2 = mat4vec4mul(m_model, (vec4){ vec3dc(teapot.normals[i2]), 0.0f });
+			// Get the normals and normalize them
+            vec4 n0 = vec4dir(mat4vec4mul(m_model, (vec4){ vec3dc(mesh.normals[mesh.tri_normals[i]]), 0.0f }));
+            vec4 n1 = vec4dir(mat4vec4mul(m_model, (vec4){ vec3dc(mesh.normals[mesh.tri_normals[i + 1]]), 0.0f }));
+            vec4 n2 = vec4dir(mat4vec4mul(m_model, (vec4){ vec3dc(mesh.normals[mesh.tri_normals[i + 2]]), 0.0f }));
 
-            vec4 pp, qp, rp;
-            if (drawNormals) {
-                pp = vec4add(p, vec4scale(n0, NORMAL_LENGTH));
-                qp = vec4add(q, vec4scale(n1, NORMAL_LENGTH));
-                rp = vec4add(r, vec4scale(n2, NORMAL_LENGTH));
+            // Vertex data for the triangle
+            float tri[3 * NVERTEXDATA] = {
+				p.x, p.y, p.z, n0.x, n0.y, n0.z,
+				q.x, q.y, q.z, n1.x, n1.y, n1.z,
+				r.x, r.y, r.z, n2.x, n2.y, n2.z,
+            };
+
+            float clipped[8 * NVERTEXDATA];
+            int count = FR_ClipPolygon(tri, 3, clipped, NVERTEXDATA, vec3dc(g), vec3dc(nearPlanePoint));
+            // Less than 3 vertices produced by clipping means that there is nothing to render
+            if (count < 3) continue;
+
+            // Project the clipped vertices
+            vec4 s[8];
+            for (int k = 0; k < count; k++) {
+                const float *v = clipped + k * NVERTEXDATA;
+                s[k] = mat4vec4mul(m, (vec4) { v[0], v[1], v[2], 1.0f });
+				if (perspective) {
+    				s[k].x /= s[k].w; s[k].y /= s[k].w; s[k].z /= s[k].w;
+				}
             }
 
-			float v0[6] = { p.x, p.y, p.z, n0.x, n0.y, n0.z };
-			float v1[6] = { q.x, q.y, q.z, n1.x, n1.y, n1.z };
-			float v2[6] = { r.x, r.y, r.z, n2.x, n2.y, n2.z };
-
-
-            p = mat4vec4mul(m, p);
-            q = mat4vec4mul(m, q);
-            r = mat4vec4mul(m, r);
-            if (drawNormals) {
-                pp = mat4vec4mul(m, pp);
-                qp = mat4vec4mul(m, qp);
-                rp = mat4vec4mul(m, rp);
+            // Fan-triangulate the clipped vertices and draw
+            // Filled triangles (fan)
+            for (int k = 1; k + 1 < count; k++) {
+                FR_DrawTriangle3DFS(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT,
+                                    // Projected position
+                                    vec4dc(s[0]), vec4dc(s[k]), vec4dc(s[k + 1]),
+                                    // (packed) vertex data
+                                    clipped, clipped + k * NVERTEXDATA, clipped + (k + 1) * NVERTEXDATA, NVERTEXDATA,
+                                    &uniforms, blinnPhongShader);
             }
 
-            if (perspective) {
-                p.x /= p.w; p.y /= p.w; p.z /= p.w;
-                q.x /= q.w; q.y /= q.w; q.z /= q.w;
-                r.x /= r.w; r.y /= r.w; r.z /= r.w;
-                if (drawNormals) {
-                    pp.x /= pp.w; pp.y /= pp.w; pp.z /= pp.w;
-                    qp.x /= qp.w; qp.y /= qp.w; qp.z /= qp.w;
-                    rp.x /= rp.w; rp.y /= rp.w; rp.z /= rp.w;
+                             
+            if (drawNormals) {
+                for (int k = 0; k < count; k++) {
+                    const float *v = clipped + k * NVERTEXDATA;
+                    vec3 worldPos = { v[0], v[1], v[2] };
+                    vec3 normal = vec3dir((vec3) { v[3], v[4], v[5] });
+                    vec3 endpoint = vec3add(worldPos, vec3scale(normal, NORMAL_LENGTH));
+
+                    // Omit normal endpoints that are beyond the near plane
+                    if (vec3dot(g, vec3sub(endpoint, nearPlanePoint)) < 0.0f) continue;
+
+					vec4 endpointHomo = { vec3dc(endpoint), 1.0f };
+					endpointHomo = mat4vec4mul(m, endpointHomo);
+					if (perspective) {
+    					endpointHomo.x /= endpointHomo.w;
+    					endpointHomo.y /= endpointHomo.w;
+    					endpointHomo.z /= endpointHomo.w;
+					}
+					FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(s[k]), vec2dc(endpointHomo), RED);
                 }
             }
 
-            FR_DrawTriangle3DFS(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r),
-                                v0, v1, v2, 6,
-                                &uniforms, blinnPhongShader
-            );
-                                
-
-            if (drawNormals) {
-                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(pp), RED);
-                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(q), vec2dc(qp), RED);
-                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(r), vec2dc(rp), RED);
-            }
-
             if (drawWireframe) {
-                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(p), vec2dc(q), GREEN);
-                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(q), vec2dc(r), GREEN);
-                FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(r), vec2dc(p), GREEN);
+                for (int k = 0; k < count; k++) {
+                    int j = (k + 1) % count;
+                    FR_DrawLine(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(s[k]), vec2dc(s[j]), GREEN);
+                }
             }
-        }
-    } else if (false) {
-		// Spinning cube
-        vec3 cube_vertices[24] = {
-            // front (+z)
-            {-1,-1, 1}, { 1,-1, 1}, { 1, 1, 1}, {-1, 1, 1},
-            // top (+y)
-            {-1, 1,-1}, {-1, 1, 1}, { 1, 1, 1}, { 1, 1,-1},
-            // bottom (-y)
-            {-1,-1,-1}, { 1,-1,-1}, { 1,-1, 1}, {-1,-1, 1},
-            // left (-x)
-            {-1,-1,-1}, {-1,-1, 1}, {-1, 1, 1}, {-1, 1,-1},
-            // right (+x)
-            { 1,-1,-1}, { 1, 1,-1}, { 1, 1, 1}, { 1,-1, 1},
-            // back (-z)
-            {-1,-1,-1}, {-1, 1,-1}, { 1, 1,-1}, { 1,-1,-1},
-        };
-
-        int cube_tris[] = {
-             0,  1,  2,    0,  2,  3,   // front
-             4,  5,  6,    4,  6,  7,   // top
-             8,  9, 10,    8, 10, 11,   // bottom
-            12, 13, 14,   12, 14, 15,   // left
-            16, 17, 18,   16, 18, 19,   // right
-            20, 21, 22,   20, 22, 23,   // back
-        };
-
-        vec2 cube_uvs[] = {
-            // front
-            {0.25f, 0.66666667f}, {0.5f,  0.66666667f}, {0.5f,  0.33333333f}, {0.25f, 0.33333333f},
-            // top
-            {0.25f, 0.0f},        {0.25f, 0.33333333f}, {0.5f,  0.33333333f}, {0.5f,  0.0f},
-            // bottom
-            {0.25f, 1.0f},        {0.5f,  1.0f},        {0.5f,  0.66666667f}, {0.25f, 0.66666667f},
-            // left
-            {0.0f,  0.66666667f}, {0.25f, 0.66666667f}, {0.25f, 0.33333333f}, {0.0f,  0.33333333f},
-            // right
-            {0.75f, 0.66666667f}, {0.75f, 0.33333333f}, {0.5f,  0.33333333f}, {0.5f,  0.66666667f},
-            // back
-            {1.0f,  0.66666667f}, {1.0f,  0.33333333f}, {0.75f, 0.33333333f}, {0.75f, 0.66666667f},
-        };
-
-        uint32_t vertex_colors[] = {
-            BROWN, BROWN, BROWN, BROWN, GRAY, GRAY, GRAY, GRAY,
-        };
-
-
-    	for (size_t i = 0; i < (size_t) sizeof(cube_tris) / sizeof(int); i += 3) {
-        	vec4 p = { vec3dc(cube_vertices[cube_tris[i]]), 1 };
-        	vec4 q = { vec3dc(cube_vertices[cube_tris[i + 1]]), 1 };
-        	vec4 r = { vec3dc(cube_vertices[cube_tris[i + 2]]), 1 };
-
-			// Model to world
-    		p = mat4vec4mul(m_model, p);
-    		q = mat4vec4mul(m_model, q);
-    		r = mat4vec4mul(m_model, r);
-
-    		p = mat4vec4mul(m, p);
-    		q = mat4vec4mul(m, q);
-    		r = mat4vec4mul(m, r);
-
-    		// Perspective - leave w alone for interpolation
-    		if (perspective) {
-        		p.x /= p.w; p.y /= p.w; p.z /= p.w;
-        		q.x /= q.w; q.y /= q.w; q.z /= q.w;
-        		r.x /= r.w; r.y /= r.w; r.z /= r.w;
-    		}
-
-    		//FR_DrawTriangle3DVC(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r), vertex_colors[cube_tris[i]], vertex_colors[cube_tris[i + 1]], vertex_colors[cube_tris[i + 2]]);
-    		FR_DrawTriangle3DUV(fb, db, CANVAS_WIDTH, CANVAS_HEIGHT, vec4dc(p), vec4dc(q), vec4dc(r),
-								vec2dc(cube_uvs[cube_tris[i]]), vec2dc(cube_uvs[cube_tris[i + 1]]), vec2dc(cube_uvs[cube_tris[i + 2]]),
-    		                    cube_tex, cube_tex_width, cube_tex_height,
-    		                    FR_SampleNearest
-    		);
     	}
-	}
-
-	// 2D homogenous example, barycentric coords
-	if (false) {
-    	int tx = 400 + 100 * sin(theta); int ty = 400 + 100 * sin(theta);
-    	vec3 v1 = { -100, -100, 1 };
-    	vec3 v2 = { 100, -100, 1 };
-    	vec3 v3 = { 0, 100, 1 };
-
-    	mat3 rotate_translate = {
-        	cos(theta), -sin(theta), tx,
-        	sin(theta), cos(theta),  ty,
-    		0,			0,			 1
-    	};
-
-    	v1 = mat3vec3mul(rotate_translate, v1);
-    	v2 = mat3vec3mul(rotate_translate, v2);
-    	v3 = mat3vec3mul(rotate_translate, v3);
-    	
-        FR_DrawCircleFill(fb, CANVAS_WIDTH, CANVAS_HEIGHT, 300, 300, 50.0f, MAGENTA);
-        FR_DrawTriangle2DVC(fb, CANVAS_WIDTH, CANVAS_HEIGHT, vec2dc(v1), vec2dc(v2), vec2dc(v3), RED, GREEN, BLUE);
-	}
+    }
     
     SDL_Event event;
     Engine* eng = (Engine*) self;
@@ -548,7 +494,36 @@ int main(void) {
 	if (file == NULL) {
     	exit(1);
 	}
-	teapot = FO_LoadObj(file);
+	meshes[0] = FO_LoadObj(file);
+	fclose(file);
+
+	file = fopen("res/floor.obj", "r");
+	meshes[1] = FO_LoadObj(file);
+	fclose(file);
+
+	file = fopen("res/monkey.obj", "r");
+	if (file == NULL) {
+    	exit(1);
+	}
+	meshes[2] = FO_LoadObj(file);
+	fclose(file);
+
+    vec3 v_min = { -f, -f, -f };
+    vec3 v_max = { f, f, f };
+    for (size_t i = 0; i < N_MESHES; i++) {
+        Mesh mesh = meshes[i];
+        for (size_t j = 0; j < arr_len(mesh.vertices); j++) {
+			vec4 v = mat4vec4mul(meshTransforms[i], (vec4) { vec3dc(mesh.vertices[j]), 1.0f });
+			v_min.x = fminf(v_min.x, v.x);
+			v_min.y = fminf(v_min.y, v.y);
+			v_min.z = fminf(v_min.z, v.z);
+			v_max.x = fmaxf(v_max.x, v.x);
+			v_max.y = fmaxf(v_max.y, v.y);
+			v_max.z = fmaxf(v_max.z, v.z);
+        }
+    }
+    lightRadius = vec3norm(vec3sub(v_max, v_min)) / 2.0f;
+    printf("%f\n", lightRadius);
 
     while (running) {
         FE_Loop(&engine, rctx, (AudioContext) {0});

@@ -1,5 +1,5 @@
 CC      := gcc
-CFLAGS  := -Wextra -O2 -g $(shell sdl2-config --cflags) -Isrc
+CFLAGS  := -Wextra -O3 -g $(shell sdl2-config --cflags) -Isrc
 LDFLAGS := $(shell sdl2-config --libs) -lm
 
 TARGET  := build/program

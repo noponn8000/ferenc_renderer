@@ -21,8 +21,9 @@ typedef struct {
 // Color
 uint32_t FR_RGBAToAGBR8888(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
-// Utils
-void FR_RotatePointI(int *x, int *y, int xc, int yc, float angle);
+// - - - - - -Utils
+// Clip a polygon (packed float array of vertices x,y,z,w) against a plane defined by n . (x - p) = 0 
+int FR_ClipPolygon(const float *in, int nInput, float *out, int valuesPerVertex, float nx, float ny, float nz, float px, float py, float pz);
 
 // Sampling
 uint32_t FR_SampleNearest(uint32_t* tex, uint16_t tex_width, uint16_t tex_height, float u, float v);
