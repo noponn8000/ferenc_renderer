@@ -45,3 +45,15 @@ Provides a lightweight "game engine" and allows for the creation of entities wit
 ## Comment on dependencies
 
 Each module is platform-agnostic, i.e., it is oblivious to what windowing or audio backend is used. The example `main.c` file uses SDL2, but it can easily be adapted to other libraries. Further, each module only depends on the C standard library and uses only C99 features.
+
+## Building
+
+```sh
+git clone https://github.com/noponn8000/ferenc_renderer
+cd ferenc_renderer
+./run.sh # or `make` and then `build/program`
+```
+
+Dependencies:
+- SDL2
+- libc
